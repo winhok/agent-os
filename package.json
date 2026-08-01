@@ -8,7 +8,8 @@
     "dev": "pnpm start",
     "start": "tsx watch --include .env src/index.ts",
     "start:once": "tsx src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "probe:cli": "tsx src/probe-cli.ts"
   },
   "engines": { "node": ">=22" },
   "keywords": [],
