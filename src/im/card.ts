@@ -15,8 +15,6 @@ const STATUS_STYLE = {
   failed: { template: "red", label: "执行失败" },
 } as const;
 
-type UpdateCard = (card: CardJson) => Promise<void>;
-
 function clampProgress(progress: number): number {
   return Math.min(100, Math.max(0, Math.round(progress)));
 }
@@ -66,6 +64,8 @@ export function buildTaskCard(options: TaskCardOptions): CardJson {
     },
   };
 }
+
+type UpdateCard = (card: CardJson) => Promise<void>;
 
 export class ThrottledCardUpdater {
   private pendingCard: CardJson | undefined;

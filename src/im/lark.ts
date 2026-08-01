@@ -1,17 +1,8 @@
 import * as Lark from "@larksuiteoapi/node-sdk";
-import { parseMentions, type Mention } from "./message-parser.js";
 import { mkdir } from "node:fs/promises";
 import { extname, join } from "node:path";
+import { parseMentions, type Mention } from "./message-parser.js";
 import type { CardJson } from "./card.js";
-
-const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/gif": "gif",
-  "image/webp": "webp",
-  "image/bmp": "bmp",
-  "image/x-icon": "ico",
-};
 
 export interface IncomingMessage {
   messageId: string;
@@ -35,6 +26,8 @@ export interface BotOptions {
 export interface Bot {
   client: Lark.Client;
   reply: (messageId: string, text: string, replyInThread?: boolean) => Promise<string | undefined>;
+  replyCard: (messageId: string, card: CardJson, replyInThread?: boolean) => Promise<string | undefined>;
+  updateCard: (messageId: string, card: CardJson) => Promise<void>;
   downloadResource: (
     messageId: string,
     fileKey: string,
@@ -42,8 +35,29 @@ export interface Bot {
     saveDir: string,
     fileName?: string,
   ) => Promise<string>;
-  replyCard: (messageId: string, card: CardJson, replyInThread?: boolean) => Promise<string | undefined>;
-  updateCard: (messageId: string, card: CardJson) => Promise<void>;
+}
+
+const CONTENT_TYPE_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/gif": "gif",
+  "image/webp": "webp",
+  "image/bmp": "bmp",
+  "image/x-icon": "ico",
+};
+
+function getHeader(headers: any, name: string): string {
+  const value =
+    typeof headers?.get === "function" ? headers.get(name) : (headers?.[name] ?? headers?.[name.toLowerCase()]);
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
+function resourceExtension(type: "image" | "file", fileName: string | undefined, contentType: string): string {
+  const original = fileName ? extname(fileName).slice(1).toLowerCase() : "";
+  if (/^[a-z0-9]{1,10}$/.test(original)) return original;
+
+  const mime = contentType.split(";", 1)[0].trim().toLowerCase();
+  return CONTENT_TYPE_EXTENSIONS[mime] ?? (type === "image" ? "img" : "bin");
 }
 
 function extractText(messageType: string, content: string): string {
@@ -64,20 +78,6 @@ function extractText(messageType: string, content: string): string {
   return "";
 }
 
-function getHeader(headers: any, name: string): string {
-  const value =
-    typeof headers?.get === "function" ? headers.get(name) : (headers?.[name] ?? headers?.[name.toLowerCase()]);
-  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
-}
-
-function resourceExtension(type: "image" | "file", fileName: string | undefined, contentType: string): string {
-  const original = fileName ? extname(fileName).slice(1).toLowerCase() : "";
-  if (/^[a-z0-9]{1,10}$/.test(original)) return original;
-
-  const mime = contentType.split(";", 1)[0].trim().toLowerCase();
-  return CONTENT_TYPE_EXTENSIONS[mime] ?? (type === "image" ? "img" : "bin");
-}
-
 export function startBot(opts: BotOptions): Bot {
   const { appId, appSecret, onMessage } = opts;
 
@@ -85,6 +85,7 @@ export function startBot(opts: BotOptions): Bot {
 
   const bot: Bot = {
     client,
+
     async reply(messageId, text, replyInThread = false) {
       const res = await client.im.v1.message.reply({
         path: { message_id: messageId },
@@ -96,19 +97,6 @@ export function startBot(opts: BotOptions): Bot {
       });
 
       return res.data?.message_id;
-    },
-
-    async downloadResource(messageId, fileKey, type, saveDir, fileName) {
-      const res = await client.im.v1.messageResource.get({
-        path: { message_id: messageId, file_key: fileKey },
-        params: { type },
-      });
-      const contentType = getHeader(res.headers, "content-type");
-      const extension = resourceExtension(type, fileName, contentType);
-      const savePath = join(saveDir, `${fileKey}.${extension}`);
-      await mkdir(saveDir, { recursive: true });
-      await res.writeFile(savePath);
-      return savePath;
     },
 
     async replyCard(messageId, card, replyInThread = false) {
@@ -128,6 +116,19 @@ export function startBot(opts: BotOptions): Bot {
         path: { message_id: messageId },
         data: { content: JSON.stringify(card) },
       });
+    },
+
+    async downloadResource(messageId, fileKey, type, saveDir, fileName) {
+      const res = await client.im.v1.messageResource.get({
+        path: { message_id: messageId, file_key: fileKey },
+        params: { type },
+      });
+      const contentType = getHeader(res.headers, "content-type");
+      const extension = resourceExtension(type, fileName, contentType);
+      const savePath = join(saveDir, `${fileKey}.${extension}`);
+      await mkdir(saveDir, { recursive: true });
+      await res.writeFile(savePath);
+      return savePath;
     },
   };
 

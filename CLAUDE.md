@@ -19,7 +19,10 @@ pnpm start（watch 模式）/ pnpm start:once（单次启动）
 - ESM only，Node 22+，pnpm
 - 凭证只放 .env（已 gitignore），绝不硬编码、绝不提交
 - 下载的图片和文件统一放在 data/downloads/，不提交 Git
+- 测试话题群 chat_id 见 `.env`
 
 ## 错题本
 
 > 踩坑后追加一行：现象 → 原因 → 正确做法。给未来的 AI 和人看。
+
+- pnpm v11 默认拒绝依赖的构建脚本（esbuild 装完不可用）→ 在 `pnpm-workspace.yaml` 写 `allowBuilds: { esbuild: true }` 放行
