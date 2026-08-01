@@ -93,6 +93,16 @@ export class ThrottledCardUpdater {
     await this.updateChain;
     await this.updateCard(finalCard);
   }
+
+  async cancel(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = undefined;
+    this.pendingCard = undefined;
+    await this.updateChain;
+  }
+
   private schedule(): void {
     if (this.timer) return;
     this.timer = setTimeout(() => {
