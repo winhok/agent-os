@@ -6,11 +6,13 @@ import { resolveMentions, extractResourceKeys } from "./im/message-parser.js";
 import { parseCommand } from "./core/command-parser.js";
 import { SessionManager, type Session } from "./core/session-manager.js";
 import { JsonSessionStore } from "./core/session-store.js";
-import { runClaude } from "./cli/claude-runner.js";
+import { ClaudeAdapter } from "./cli/claude-adapter.js";
+import { runCli } from "./cli/runner.js";
 
 const appId = process.env.BOT_A_APP_ID;
 const appSecret = process.env.BOT_A_APP_SECRET;
 const cliWorkdir = resolve(process.env.CLAUDE_WORKDIR ?? process.cwd());
+const cliAdapter = new ClaudeAdapter();
 
 if (!appId || !appSecret) {
   console.error("缺少 BOT_A_APP_ID / BOT_A_APP_SECRET，请检查 .env");
@@ -18,7 +20,7 @@ if (!appId || !appSecret) {
 }
 
 console.log("Agent OS 启动，正在建立飞书长连接…");
-console.log(`[CLI] command=claude cwd=${cliWorkdir}`);
+console.log(`[CLI] command=${cliAdapter.command} cwd=${cliWorkdir}`);
 
 const sessions = await SessionManager.open({
   store: new JsonSessionStore(join("data", "sessions.json")),
@@ -26,10 +28,12 @@ const sessions = await SessionManager.open({
 console.log(`[会话] 已恢复 ${sessions.size} 个会话`);
 const activeRuns = new Map<string, AbortController>();
 
-function executeCli(prompt: string, signal: AbortSignal) {
-  return runClaude({
+function executeCli(prompt: string, sessionId: string | undefined, signal: AbortSignal) {
+  return runCli({
+    adapter: cliAdapter,
     prompt,
     cwd: cliWorkdir,
+    sessionId,
     signal,
   });
 }
@@ -46,6 +50,7 @@ function formatSessionStatus(session: Session): string {
     `会话：${session.id}`,
     `状态：${STATUS_LABELS[session.status]}`,
     `执行引擎：${session.cliId}`,
+    `CLI 会话：${session.cliSessionId ?? "(尚未建立)"}`,
     `话题：${session.threadId}`,
     `更新时间：${session.updatedAt}`,
   ].join("\n");
@@ -154,8 +159,12 @@ startBot({
     }
     console.log(`[卡片] 已发送 message_id=${cardId} inThread=${hasThread}`);
 
-    void executeCli(resolved, run.signal)
+    void executeCli(resolved, session.cliSessionId, run.signal)
       .then(async (result) => {
+        if (result.sessionId && result.sessionId !== session.cliSessionId) {
+          await sessions.setCliSessionId(session.id, result.sessionId);
+        }
+
         await bot.updateCard(
           cardId,
           buildTaskCard({

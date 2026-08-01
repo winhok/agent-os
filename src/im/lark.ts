@@ -60,21 +60,37 @@ function resourceExtension(type: "image" | "file", fileName: string | undefined,
   return CONTENT_TYPE_EXTENSIONS[mime] ?? (type === "image" ? "img" : "bin");
 }
 
-function extractText(messageType: string, content: string): string {
+interface PostElement {
+  tag?: string;
+  text?: string;
+  user_id?: string;
+}
+
+function renderPostElement(element: PostElement): string {
+  if (element.tag === "at") return element.user_id ?? "";
+  if (element.tag === "br") return "\n";
+  if (["text", "a", "code", "code_block", "md"].includes(element.tag ?? "")) {
+    return element.text ?? "";
+  }
+  return "";
+}
+
+export function extractMessageText(messageType: string, content: string): string {
   const parsed = JSON.parse(content);
 
   if (messageType === "text") {
     return parsed.text ?? "";
   }
+
   if (messageType === "post") {
-    const paragraphs: any[][] = parsed.content ?? [];
+    const paragraphs: PostElement[][] = parsed.content ?? [];
     return paragraphs
-      .flat()
-      .filter((el) => el.tag === "text")
-      .map((el) => el.text)
-      .join("")
+      .map((paragraph) => paragraph.map(renderPostElement).join(""))
+      .filter(Boolean)
+      .join("\n")
       .trim();
   }
+
   return "";
 }
 
@@ -140,7 +156,7 @@ export function startBot(opts: BotOptions): Bot {
         chatId: m.chat_id,
         chatType: m.chat_type,
         messageType: m.message_type,
-        text: extractText(m.message_type, m.content),
+        text: extractMessageText(m.message_type, m.content),
         rootId: m.root_id ?? "",
         threadId: m.thread_id ?? "",
         senderOpenId: data.sender.sender_id?.open_id ?? "",

@@ -13,6 +13,7 @@ const SessionSchema = z.object({
   threadId: z.string().min(1),
   chatId: z.string().min(1),
   cliId: z.literal("claude"),
+  cliSessionId: z.string().min(1).optional(),
   status: z.enum(["creating", "active", "idle", "closed"]),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
