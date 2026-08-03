@@ -8,16 +8,17 @@ pnpm start（watch 模式）/ pnpm start:once（单次启动）
 
 ## 模块地图（随开发生长，只列已存在的）
 
-- src/index.ts — 应用入口：编排飞书消息、会话、命令、资源下载与 Claude Code 执行回传
+- src/index.ts — 应用入口：编排飞书消息、会话、命令、资源下载、任务进度与 Claude Code 执行回传
 - src/im/lark.ts — 飞书接入：WS 收消息，REST 回复、卡片更新与资源下载
 - src/im/card.ts — 任务状态卡片构建与节流更新
 - src/im/message-parser.ts — @提及还原与图片/文件资源提取
 - src/core/command-parser.ts — 话题内 `/status`、`/close`、`/help` 命令解析
 - src/core/session-manager.ts — 飞书话题到 CLI 会话的映射与状态流转
 - src/core/session-store.ts — 会话 JSON 持久化、启动恢复与串行原子写入
-- src/cli/types.ts — CLI 适配器、事件与执行结果的公共类型
-- src/cli/claude-adapter.ts — Claude Code 参数构建、续接与 stream-json 事件解析
-- src/cli/runner.ts — CLI 子进程执行、超时/取消控制与最终结果收集
+- src/core/task-progress.ts — CLI 工具事件、上下文用量与任务进度快照聚合
+- src/cli/types.ts — CLI 适配器、生命周期事件、运行统计与执行结果的公共类型
+- src/cli/claude-adapter.ts — Claude Code 参数构建、续接及 stream-json 事件与统计解析
+- src/cli/runner.ts — CLI 子进程执行、事件转发、超时/取消控制与最终结果收集
 - src/probe-cli.ts — Claude Code / Codex JSONL 事件流的独立调试查看器
 
 ## 约定
