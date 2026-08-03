@@ -17,7 +17,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@11.20.0",
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.72.0",
     "dotenv": "^17.4.2",
@@ -25,7 +25,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
-    "tsx": "^4.23.1",
+    "tsx": "^4.23.5",
     "typescript": "^7.0.2"
   }
 }

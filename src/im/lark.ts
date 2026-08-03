@@ -7,9 +7,9 @@ import type { CardJson } from "./card.js";
 export interface IncomingMessage {
   messageId: string;
   chatId: string;
-  chatType: string; // 'p2p' 单聊 | 'group' 群聊
-  messageType: string; // 'text' | 'image' | 'post' | ...
-  text: string; // text 消息的正文（其他类型为空串）
+  chatType: string;
+  messageType: string;
+  text: string;
   rootId: string;
   threadId: string;
   senderOpenId: string;
@@ -21,6 +21,27 @@ export interface BotOptions {
   appId: string;
   appSecret: string;
   onMessage: (msg: IncomingMessage, bot: Bot) => Promise<void>;
+  onCardAction?: (action: CardAction) => Promise<CardActionResponse | undefined>;
+}
+
+export interface CardAction {
+  operatorOpenId: string;
+  messageId: string;
+  value: Record<string, unknown>;
+}
+
+export interface CardActionResponse {
+  toast?: { type: "success" | "info" | "warning" | "error"; content: string };
+  card?: { type: "raw"; data: CardJson };
+}
+
+export function parseCardAction(data: any): CardAction {
+  const value = data?.action?.value;
+  return {
+    operatorOpenId: data?.operator?.open_id ?? data?.operator_id?.open_id ?? "",
+    messageId: data?.context?.open_message_id ?? data?.open_message_id ?? "",
+    value: isRecord(value) ? value : {},
+  };
 }
 
 export interface Bot {
@@ -77,11 +98,9 @@ function renderPostElement(element: PostElement): string {
 
 export function extractMessageText(messageType: string, content: string): string {
   const parsed = JSON.parse(content);
-
   if (messageType === "text") {
     return parsed.text ?? "";
   }
-
   if (messageType === "post") {
     const paragraphs: PostElement[][] = parsed.content ?? [];
     return paragraphs
@@ -90,12 +109,11 @@ export function extractMessageText(messageType: string, content: string): string
       .join("\n")
       .trim();
   }
-
   return "";
 }
 
 export function startBot(opts: BotOptions): Bot {
-  const { appId, appSecret, onMessage } = opts;
+  const { appId, appSecret, onMessage, onCardAction } = opts;
 
   const client = new Lark.Client({ appId, appSecret });
 
@@ -111,7 +129,6 @@ export function startBot(opts: BotOptions): Bot {
           ...(replyInThread ? { reply_in_thread: true } : {}),
         },
       });
-
       return res.data?.message_id;
     },
 
@@ -149,6 +166,10 @@ export function startBot(opts: BotOptions): Bot {
   };
 
   const dispatcher = new Lark.EventDispatcher({}).register({
+    "card.action.trigger": async (data: any) => {
+      if (!onCardAction) return undefined;
+      return onCardAction(parseCardAction(data));
+    },
     "im.message.receive_v1": async (data) => {
       const m = data.message;
       const msg: IncomingMessage = {
@@ -171,4 +192,8 @@ export function startBot(opts: BotOptions): Bot {
   wsClient.start({ eventDispatcher: dispatcher });
 
   return bot;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

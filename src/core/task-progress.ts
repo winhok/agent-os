@@ -17,7 +17,9 @@ export interface TaskProgressSnapshot {
   completedCount: number;
   activities: TaskActivity[];
   contextUsedTokens?: number;
+  contextStartTokens?: number;
   contextWindowTokens?: number;
+  startedNewSession?: boolean;
 }
 
 interface ActiveTool {
@@ -34,16 +36,19 @@ export class TaskProgressTracker {
   private toolCount = 0;
   private completedCount = 0;
   private contextUsedTokens: number | undefined;
+  private contextStartTokens: number | undefined;
 
   constructor(
     private readonly now: () => number = Date.now,
     private readonly contextWindowTokens?: number,
+    private readonly startedNewSession = false,
   ) {
     this.startedAt = now();
   }
 
   accept(event: CliEvent): TaskProgressSnapshot {
     if (event.type === "context") {
+      this.contextStartTokens ??= event.usedTokens;
       this.contextUsedTokens = event.usedTokens;
     }
     if (event.type === "tool_start") {
@@ -84,7 +89,9 @@ export class TaskProgressTracker {
       completedCount: this.completedCount,
       activities: [...this.activities],
       ...(this.contextUsedTokens !== undefined ? { contextUsedTokens: this.contextUsedTokens } : {}),
+      ...(this.contextStartTokens !== undefined ? { contextStartTokens: this.contextStartTokens } : {}),
       ...(this.contextWindowTokens !== undefined ? { contextWindowTokens: this.contextWindowTokens } : {}),
+      ...(this.startedNewSession ? { startedNewSession: true } : {}),
     };
   }
 }

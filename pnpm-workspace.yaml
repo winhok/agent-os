@@ -1,3 +1,5 @@
 allowBuilds:
   esbuild: true
   protobufjs: true
+minimumReleaseAgeExclude:
+  - tsx@4.23.5
