@@ -136,9 +136,17 @@ export class SessionManager {
   }
 
   async setCliSessionId(sessionId: string, cliSessionId: string): Promise<Session> {
+    if (!cliSessionId) throw new Error("CLI 会话 ID 不能为空");
+    return this.updateCliSelection(sessionId, cliSessionId);
+  }
+
+  async clearCliSessionId(sessionId: string): Promise<Session> {
+    return this.updateCliSelection(sessionId, undefined);
+  }
+
+  private async updateCliSelection(sessionId: string, cliSessionId: string | undefined): Promise<Session> {
     const current = this.get(sessionId);
     if (!current) throw new Error(`会话不存在: ${sessionId}`);
-    if (!cliSessionId) throw new Error("CLI 会话 ID 不能为空");
 
     const updated: Session = {
       ...current,

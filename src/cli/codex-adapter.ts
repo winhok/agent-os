@@ -112,6 +112,15 @@ export class CodexAdapter implements CliAdapter {
     return ["exec", "resume", "--json", "--skip-git-repo-check", sessionId, prompt];
   }
 
+  buildCompactPlan(sessionId: string) {
+    return {
+      protocol: "codex-app-server" as const,
+      command: this.command,
+      args: ["app-server", "--stdio"],
+      sessionId,
+    };
+  }
+
   parseEvents(line: string): CliEvent[] {
     let event: CodexEvent;
     try {

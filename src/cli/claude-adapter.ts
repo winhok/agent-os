@@ -130,6 +130,15 @@ export class ClaudeAdapter implements CliAdapter {
     return ["--resume", sessionId, ...outputArgs(prompt)];
   }
 
+  buildCompactPlan(sessionId: string, instructions?: string) {
+    const command = instructions?.trim() ? `/compact ${instructions.trim()}` : "/compact";
+    return {
+      protocol: "claude-stream-json" as const,
+      command: this.command,
+      args: this.buildResumeArgs(command, sessionId),
+    };
+  }
+
   parseEvent(line: string): CliEvent | undefined {
     return this.parseEvents(line)[0];
   }
