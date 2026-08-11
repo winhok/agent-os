@@ -1,0 +1,19 @@
+{
+  "bots": [
+    {
+      "id": "developer",
+      "appIdEnv": "FEISHU_DEVELOPER_APP_ID",
+      "appSecretEnv": "FEISHU_DEVELOPER_APP_SECRET",
+      "defaultCli": "claude",
+      "systemPrompt": "你是主力开发助手，负责理解需求并完成实现。"
+    },
+    {
+      "id": "reviewer",
+      "appIdEnv": "FEISHU_REVIEWER_APP_ID",
+      "appSecretEnv": "FEISHU_REVIEWER_APP_SECRET",
+      "defaultCli": "codex",
+      "systemPrompt": "你是审查助手，负责检查实现、发现风险并给出修改建议。",
+      "enabled": true
+    }
+  ]
+}

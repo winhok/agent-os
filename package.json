@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "pnpm start",
-    "start": "tsx watch --include .env src/index.ts",
+    "start": "tsx watch --include .env --include 'config/*.json' src/index.ts",
     "start:once": "tsx src/index.ts",
     "build": "tsc",
     "probe:cli": "tsx src/probe-cli.ts"

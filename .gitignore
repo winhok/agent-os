@@ -2,5 +2,6 @@ node_modules/
 .pnpm-store/
 dist/
 .env
+config/bots.json
 data/
 *.log
