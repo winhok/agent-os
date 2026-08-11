@@ -9,25 +9,29 @@ import {
   ThrottledCardUpdater,
 } from "./im/card.js";
 import { resolveMentions, extractResourceKeys } from "./im/message-parser.js";
-import { parseCommand } from "./core/command-parser.js";
+import { parseCliRequest, parseCommand } from "./core/command-parser.js";
 import { SessionManager, type Session } from "./core/session-manager.js";
 import { JsonSessionStore } from "./core/session-store.js";
 import { TaskProgressTracker } from "./core/task-progress.js";
 import { requestTaskAbort, type ActiveRun } from "./core/task-abort.js";
-import { ClaudeAdapter } from "./cli/claude-adapter.js";
+import { getCliAdapter, listCliAdapters, parseCliId } from "./cli/registry.js";
+import type { CliAdapter } from "./cli/types.js";
 import { runCli } from "./cli/runner.js";
 
 const appId = process.env.BOT_A_APP_ID;
 const appSecret = process.env.BOT_A_APP_SECRET;
-const cliWorkdir = resolve(process.env.CLAUDE_WORKDIR ?? process.cwd());
-const cliAdapter = new ClaudeAdapter();
+const cliWorkdir = resolve(process.env.CLI_WORKDIR ?? process.env.CLAUDE_WORKDIR ?? process.cwd());
+const defaultCliId = parseCliId(process.env.DEFAULT_CLI);
 
 if (!appId || !appSecret) {
   console.error("缺少 BOT_A_APP_ID / BOT_A_APP_SECRET，请检查 .env");
   process.exit(1);
 }
 console.log("Agent OS 启动，正在建立飞书长连接…");
-console.log(`[CLI] command=${cliAdapter.command} cwd=${cliWorkdir}`);
+console.log(`[CLI] default=${defaultCliId}`);
+for (const adapter of listCliAdapters()) {
+  console.log(`[CLI] id=${adapter.id} command=${adapter.command} cwd=${cliWorkdir}`);
+}
 
 const sessions = await SessionManager.open({
   store: new JsonSessionStore(join("data", "sessions.json")),
@@ -37,13 +41,14 @@ const activeRuns = new Map<string, ActiveRun>();
 const contextWindows = new Map<string, number>();
 
 function executeCli(
+  adapter: CliAdapter,
   prompt: string,
   sessionId: string | undefined,
   signal: AbortSignal,
   onEvent: Parameters<typeof runCli>[0]["onEvent"],
 ) {
   return runCli({
-    adapter: cliAdapter,
+    adapter,
     prompt,
     cwd: cliWorkdir,
     sessionId,
@@ -60,10 +65,12 @@ const STATUS_LABELS: Record<Session["status"], string> = {
 };
 
 function formatSessionStatus(session: Session): string {
+  const adapter = getCliAdapter(session.cliId);
+
   return [
     `会话：${session.id}`,
     `状态：${STATUS_LABELS[session.status]}`,
-    `执行引擎：${session.cliId}`,
+    `执行引擎：${adapter.displayName}`,
     `CLI 会话：${session.cliSessionId ?? "(尚未建立)"}`,
     `话题：${session.threadId}`,
     `更新时间：${session.updatedAt}`,
@@ -101,18 +108,45 @@ startBot({
   onMessage: async (msg, bot) => {
     const resolved = resolveMentions(msg.text, msg.mentions);
     const hasThread = !!msg.threadId || !!msg.rootId;
-    const { session, isNew } = await sessions.resolve(msg);
+    const cliRequest = parseCliRequest(resolved);
+    if (cliRequest && !cliRequest.prompt) {
+      await bot.reply(
+        msg.messageId,
+        `请在 /${cliRequest.cliId} 后面写下任务，例如：/${cliRequest.cliId} 检查项目状态`,
+        hasThread,
+      );
+      return;
+    }
+    const { session, isNew } = await sessions.resolve(msg, cliRequest?.cliId ?? defaultCliId);
+    const cliAdapter = getCliAdapter(session.cliId);
+    const prompt = cliRequest?.prompt ?? resolved;
+
     console.log(`[收到] chat=${msg.chatId} threadId=${msg.threadId} rootId=${msg.rootId} sender=${msg.senderOpenId}`);
     console.log(`  原文: ${msg.text}`);
     console.log(`  还原: ${resolved}`);
     console.log(`  mentions: ${msg.mentions.map((m) => `${m.key}=${m.name}(${m.openId})`).join(", ") || "(无)"}`);
     console.log(`  [会话] ${isNew ? "新建" : "复用"} id=${session.id} status=${session.status}`);
 
+    if (!isNew && cliRequest && cliRequest.cliId !== session.cliId) {
+      await bot.reply(
+        msg.messageId,
+        `当前话题已经在使用 ${cliAdapter.displayName}。如需切换执行引擎，请新开一个话题。`,
+        hasThread,
+      );
+      return;
+    }
+
     const command = parseCommand(resolved);
     if (command?.name === "help") {
       await bot.reply(
         msg.messageId,
-        ["/status 查看当前会话", "/close 关闭当前会话", "/help 查看命令"].join("\n"),
+        [
+          "/status 查看当前会话",
+          "/close 关闭当前会话",
+          "/help 查看命令",
+          "/claude <任务> 新话题使用 Claude Code",
+          "/codex <任务> 新话题使用 Codex",
+        ].join("\n"),
         hasThread,
       );
       return;
@@ -175,7 +209,7 @@ startBot({
       cardId = await bot.replyCard(
         msg.messageId,
         buildTaskCard({
-          title: "Claude Code",
+          title: cliAdapter.displayName,
           status: "running",
           detail: "正在理解任务",
           abortSessionId: session.id,
@@ -202,7 +236,7 @@ startBot({
       const snapshot = progress.snapshot();
       cardUpdater.push(
         buildTaskCard({
-          title: "Claude Code",
+          title: cliAdapter.displayName,
           status: "running",
           detail: snapshot.current,
           progress: snapshot,
@@ -213,7 +247,7 @@ startBot({
     const progressHeartbeat = setInterval(renderProgress, 1_000);
     progressHeartbeat.unref();
 
-    void executeCli(resolved, session.cliSessionId, run.signal, (event) => {
+    void executeCli(cliAdapter, prompt, session.cliSessionId, run.signal, (event) => {
       if (event.type !== "tool_start" && event.type !== "tool_end" && event.type !== "context") return;
       progress.accept(event);
       renderProgress();
@@ -229,7 +263,7 @@ startBot({
         const snapshot = progress.snapshot();
         await cardUpdater.finish(
           buildTaskCard({
-            title: "Claude Code",
+            title: cliAdapter.displayName,
             status: "success",
             detail: "执行完成",
             progress: snapshot,
@@ -243,7 +277,7 @@ startBot({
             await bot.reply(msg.messageId, chunk, hasThread);
           }
         }
-        console.log(`[CLI] 完成 session_id=${result.sessionId ?? "(无)"}`);
+        console.log(`[CLI] ${cliAdapter.id} 完成 session_id=${result.sessionId ?? "(无)"}`);
       })
       .catch(async (error) => {
         clearInterval(progressHeartbeat);
@@ -251,7 +285,7 @@ startBot({
           console.log("[CLI] 任务已取消");
           await cardUpdater.finish(
             buildTaskCard({
-              title: "Claude Code",
+              title: cliAdapter.displayName,
               status: "cancelled",
               detail:
                 activeRun.cancelMode === "close"
@@ -266,7 +300,7 @@ startBot({
         console.error("[CLI] 执行失败:", message);
         await cardUpdater.finish(
           buildTaskCard({
-            title: "Claude Code",
+            title: cliAdapter.displayName,
             status: "failed",
             detail: "执行没有完成。你可以调整指令后，在当前话题里重试。",
             technicalDetail: message,

@@ -1,4 +1,4 @@
-export type CliId = "claude";
+export type CliId = "claude" | "codex";
 
 export interface CliRunStats {
   durationMs?: number;
@@ -14,7 +14,13 @@ export interface CliRunStats {
 
 export type CliEvent =
   | { type: "session"; sessionId: string }
-  | { type: "tool_start"; toolUseId: string; toolName: string; label: string; detail?: string }
+  | {
+      type: "tool_start";
+      toolUseId: string;
+      toolName: string;
+      label: string;
+      detail?: string;
+    }
   | { type: "tool_end"; toolUseId: string; failed: boolean }
   | { type: "context"; usedTokens: number }
   | { type: "result"; answer: string; sessionId?: string; stats?: CliRunStats }
