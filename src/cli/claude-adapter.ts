@@ -114,7 +114,7 @@ function parseStats(event: ClaudeEvent): CliRunStats | undefined {
 }
 
 function outputArgs(prompt: string): string[] {
-  return ["-p", prompt, "--output-format", "stream-json", "--verbose"];
+  return ["--dangerously-skip-permissions", "-p", prompt, "--output-format", "stream-json", "--verbose"];
 }
 
 export class ClaudeAdapter implements CliAdapter {

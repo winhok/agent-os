@@ -6,7 +6,8 @@
       "appSecretEnv": "FEISHU_DEVELOPER_APP_SECRET",
       "defaultCli": "claude",
       "workspace": ".",
-      "systemPrompt": "你是主力开发助手，负责理解需求并完成实现。"
+      "systemPrompt": "你是主力开发助手，负责理解需求并完成实现。",
+      "reviewBy": "reviewer"
     },
     {
       "id": "reviewer",
