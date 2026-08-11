@@ -14,18 +14,20 @@ import { SessionManager, type Session } from "./core/session-manager.js";
 import { JsonSessionStore } from "./core/session-store.js";
 import { TaskProgressTracker } from "./core/task-progress.js";
 import { requestTaskAbort, type ActiveRun } from "./core/task-abort.js";
+import { ensureWorkspaceDirectory, resolveWorkspacePath } from "./core/workspace.js";
 import { buildBotPrompt, loadBotConfigs, type BotConfig } from "./core/bot-registry.js";
 import { getCliAdapter, listCliAdapters } from "./cli/registry.js";
 import type { CliAdapter } from "./cli/types.js";
 import { runCli } from "./cli/runner.js";
 
-const cliWorkdir = resolve(process.env.CLI_WORKDIR ?? process.env.CLAUDE_WORKDIR ?? process.cwd());
-
 const botConfigPath = resolve(process.env.BOTS_CONFIG ?? join("config", "bots.json"));
 const botConfigs = await loadBotConfigs(botConfigPath);
 
+await Promise.all(botConfigs.map((config) => ensureWorkspaceDirectory(config.workspaceDir)));
+const defaultWorkspaces = Object.fromEntries(botConfigs.map((config) => [config.id, config.workspaceDir]));
+
 const sessions = await SessionManager.open({
-  store: new JsonSessionStore(join("data", "sessions.json"), botConfigs[0]?.id),
+  store: new JsonSessionStore(join("data", "sessions.json"), botConfigs[0]?.id, defaultWorkspaces),
 });
 const activeRuns = new Map<string, ActiveRun>();
 const contextWindows = new Map<string, number>();
@@ -33,15 +35,16 @@ const contextWindows = new Map<string, number>();
 console.log("Agent OS 启动，正在建立飞书长连接…");
 console.log(`[配置] 已注册 ${botConfigs.length} 个 bot，已恢复 ${sessions.size} 个会话`);
 for (const adapter of listCliAdapters()) {
-  console.log(`[CLI] id=${adapter.id} command=${adapter.command} cwd=${cliWorkdir}`);
+  console.log(`[CLI] id=${adapter.id} command=${adapter.command}`);
 }
 for (const config of botConfigs) {
-  console.log(`[Bot ${config.id.toUpperCase()}] default_cli=${config.defaultCliId}`);
+  console.log(`[Bot ${config.id.toUpperCase()}] default_cli=${config.defaultCliId} workspace=${config.workspaceDir}`);
 }
 
 function executeCli(
   adapter: CliAdapter,
   prompt: string,
+  workspaceDir: string,
   sessionId: string | undefined,
   signal: AbortSignal,
   onEvent: Parameters<typeof runCli>[0]["onEvent"],
@@ -49,7 +52,7 @@ function executeCli(
   return runCli({
     adapter,
     prompt,
-    cwd: cliWorkdir,
+    cwd: workspaceDir,
     sessionId,
     signal,
     onEvent,
@@ -109,6 +112,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
     onMessage: async (msg, bot) => {
       const resolved = resolveMentions(msg.text, msg.mentions);
       const hasThread = !!msg.threadId || !!msg.rootId;
+      const command = parseCommand(resolved);
       const cliRequest = parseCliRequest(resolved);
       if (cliRequest && !cliRequest.prompt) {
         await bot.reply(
@@ -118,7 +122,17 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
         );
         return;
       }
-      const { session, isNew } = await sessions.resolve(msg, cliRequest?.cliId ?? config.defaultCliId, config.id);
+      const resolvedSession = await sessions.resolve(
+        msg,
+        cliRequest?.cliId ?? config.defaultCliId,
+        config.id,
+        config.workspaceDir,
+      );
+      let { session } = resolvedSession;
+      const { isNew } = resolvedSession;
+      if (command && isNew && session.status === "creating") {
+        session = await sessions.transition(session.id, "idle");
+      }
       const cliAdapter = getCliAdapter(session.cliId);
       const prompt = buildBotPrompt(config.systemPrompt, cliRequest?.prompt ?? resolved);
 
@@ -137,12 +151,13 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
         return;
       }
 
-      const command = parseCommand(resolved);
       if (command?.name === "help") {
         await bot.reply(
           msg.messageId,
           [
             "/status 查看当前会话",
+            "/cd 查看当前工作目录",
+            "/cd <目录> 切换当前话题的工作目录",
             "/close 关闭当前会话",
             "/help 查看命令",
             "/claude <任务> 新话题使用 Claude Code",
@@ -154,6 +169,32 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
       }
       if (command?.name === "status") {
         await bot.reply(msg.messageId, formatSessionStatus(session, config.id), hasThread);
+        return;
+      }
+      if (command?.name === "cd") {
+        if (!command.path) {
+          await bot.reply(msg.messageId, `当前工作目录：${session.workspaceDir}`, hasThread);
+          return;
+        }
+        if (session.status === "active") {
+          await bot.reply(msg.messageId, "当前任务仍在执行，结束后再切换工作目录。", hasThread);
+          return;
+        }
+        try {
+          const workspaceDir = resolveWorkspacePath(command.path, session.workspaceDir);
+          await ensureWorkspaceDirectory(workspaceDir);
+          const changed = workspaceDir !== session.workspaceDir;
+          await sessions.setWorkspaceDir(session.id, workspaceDir);
+          await bot.reply(
+            msg.messageId,
+            changed
+              ? `工作目录已切换到：${workspaceDir}\n下一条任务会在这里建立新的 CLI 会话。`
+              : `当前工作目录已经是：${workspaceDir}`,
+            hasThread,
+          );
+        } catch (error) {
+          await bot.reply(msg.messageId, `无法切换工作目录：${(error as Error).message}`, hasThread);
+        }
         return;
       }
       if (command?.name === "close") {
@@ -248,7 +289,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
       const progressHeartbeat = setInterval(renderProgress, 1_000);
       progressHeartbeat.unref();
 
-      void executeCli(cliAdapter, prompt, session.cliSessionId, run.signal, (event) => {
+      void executeCli(cliAdapter, prompt, session.workspaceDir, session.cliSessionId, run.signal, (event) => {
         if (event.type !== "tool_start" && event.type !== "tool_end" && event.type !== "context") return;
         progress.accept(event);
         renderProgress();
