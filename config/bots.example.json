@@ -7,7 +7,8 @@
       "defaultCli": "claude",
       "workspace": ".",
       "systemPrompt": "你是主力开发助手，负责理解需求并完成实现。",
-      "reviewBy": "reviewer"
+      "reviewBy": "reviewer",
+      "collaborationMaxRounds": 2
     },
     {
       "id": "reviewer",

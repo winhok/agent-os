@@ -3,12 +3,14 @@ export interface CollaborationMessage {
   taskId: string;
   fromBotId: string;
   toBotId: string;
+  round: number;
+  maxRounds: number;
   workspaceDir: string;
   prompt: string;
 }
 
 export function collaborationTurnKey(message: CollaborationMessage): string {
-  return `${message.taskId}:${message.toBotId}`;
+  return `${message.taskId}:${message.round}:${message.toBotId}`;
 }
 
 export class CollaborationInbox {

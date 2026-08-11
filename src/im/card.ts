@@ -33,6 +33,8 @@ export interface CollaborationCardOptions {
   targetName: string;
   workspaceName: string;
   prompt: string;
+  round: number;
+  maxRounds: number;
 }
 
 const STATUS_STYLE = {
@@ -429,17 +431,23 @@ export function buildSessionNoticeCard(options: SessionNoticeCardOptions): CardJ
 }
 
 export function buildCollaborationCard(options: CollaborationCardOptions): CardJson {
+  const isReviewRequest = options.round === 1;
+  const isLastRound = options.round >= options.maxRounds;
+  const title = isReviewRequest ? "代码审查已发起" : "审查意见已返回";
+  const action = isReviewRequest ? "请接手检查" : "请确认并处理反馈";
+  const description = isReviewRequest ? "开发任务已经完成，现在进入独立审查。" : "审查已经完成，反馈已交回开发侧。";
+  const footer = isLastRound
+    ? "这是本次协作的最后一轮，处理完成后流程结束。"
+    : `完成后，结果会自动交回 ${options.senderName}。`;
   return {
     schema: "2.0",
     config: {
       update_multi: true,
-      summary: {
-        content: `代码审查已发起：${options.senderName} → ${options.targetName}`,
-      },
+      summary: { content: `${title}：${options.senderName} → ${options.targetName}` },
     },
     header: {
       template: "blue",
-      title: { tag: "plain_text", content: "代码审查已发起" },
+      title: { tag: "plain_text", content: title },
       subtitle: {
         tag: "plain_text",
         content: `${options.senderName} → ${options.targetName}`,
@@ -451,7 +459,7 @@ export function buildCollaborationCard(options: CollaborationCardOptions): CardJ
       elements: [
         {
           tag: "markdown",
-          content: `**${options.targetName}，请接手检查**\n\n开发任务已经完成，现在进入独立审查。`,
+          content: `**${options.targetName}，${action}**\n\n${description}`,
         },
         {
           tag: "column_set",
@@ -476,7 +484,7 @@ export function buildCollaborationCard(options: CollaborationCardOptions): CardJ
               elements: [
                 {
                   tag: "markdown",
-                  content: "**当前环节**\n独立审查",
+                  content: `**当前环节**\n${isReviewRequest ? "独立审查" : "处理反馈"}`,
                 },
               ],
             },
@@ -485,7 +493,7 @@ export function buildCollaborationCard(options: CollaborationCardOptions): CardJ
         {
           tag: "collapsible_panel",
           expanded: false,
-          header: collapsibleHeader("查看审查说明"),
+          header: collapsibleHeader(isReviewRequest ? "查看审查说明" : "查看审查反馈"),
           vertical_spacing: "8px",
           padding: "8px 8px 8px 8px",
           elements: [
@@ -496,10 +504,7 @@ export function buildCollaborationCard(options: CollaborationCardOptions): CardJ
           ],
         },
         { tag: "hr" },
-        {
-          tag: "markdown",
-          content: `_完成后，结果会通知 ${options.senderName}。_`,
-        },
+        { tag: "markdown", content: `_${footer}_` },
       ],
     },
   };
