@@ -6,11 +6,12 @@ import {
   answerContinuation,
   answerNeedsContinuation,
   buildCollaborationCard,
+  buildResumeCard,
+  buildSessionNoticeCard,
+  buildTeamCard,
   buildTaskCard,
   splitLongText,
   ThrottledCardUpdater,
-  buildResumeCard,
-  buildSessionNoticeCard,
 } from "./im/card.js";
 import { resolveMentions, extractResourceKeys } from "./im/message-parser.js";
 import { parseCliRequest, parseCommand } from "./core/command-parser.js";
@@ -20,7 +21,8 @@ import { TaskProgressTracker } from "./core/task-progress.js";
 import { requestTaskAbort, type ActiveRun } from "./core/task-abort.js";
 import { CollaborationInbox, collaborationTurnKey, type CollaborationMessage } from "./core/collaboration.js";
 import { ensureWorkspaceDirectory, resolveWorkspacePath } from "./core/workspace.js";
-import { buildBotPrompt, loadBotConfigs, type BotConfig } from "./core/bot-registry.js";
+import { buildBotPrompt, loadAgentOsConfig, type BotConfig } from "./core/bot-registry.js";
+import { TeamRegistry } from "./core/team-registry.js";
 import { getCliAdapter, listCliAdapters } from "./cli/registry.js";
 import type { CliAdapter } from "./cli/types.js";
 import { runCli } from "./cli/runner.js";
@@ -28,9 +30,16 @@ import { compactCliSession } from "./cli/native-compact.js";
 import { listNativeCliSessions } from "./cli/native-sessions.js";
 
 const botConfigPath = resolve(process.env.BOTS_CONFIG ?? join("config", "bots.json"));
-const botConfigs = await loadBotConfigs(botConfigPath);
+const agentOsConfig = await loadAgentOsConfig(botConfigPath);
+const botConfigs = agentOsConfig.bots;
+const teamRegistry = new TeamRegistry(agentOsConfig.teamLeaderId, botConfigs);
 
 await Promise.all(botConfigs.map((config) => ensureWorkspaceDirectory(config.workspaceDir)));
+for (const missing of await teamRegistry.findMissingSkills()) {
+  console.warn(
+    `[Skill] bot=${missing.botId} 找不到 $${missing.skill}，请安装到当前工作目录的 .agents/skills 或 .claude/skills`,
+  );
+}
 const defaultWorkspaces = Object.fromEntries(botConfigs.map((config) => [config.id, config.workspaceDir]));
 
 const sessions = await SessionManager.open({
@@ -48,7 +57,9 @@ const processedCollaborationTurns = new Set<string>();
 const collaborationInbox = new CollaborationInbox();
 
 console.log("Agent OS 启动，正在建立飞书长连接…");
-console.log(`[配置] 已注册 ${botConfigs.length} 个 bot，已恢复 ${sessions.size} 个会话`);
+console.log(
+  `[配置] 已注册 ${botConfigs.length} 个 bot，Team Leader=${teamRegistry.leaderBotId}，已恢复 ${sessions.size} 个会话`,
+);
 for (const adapter of listCliAdapters()) {
   console.log(`[CLI] id=${adapter.id} command=${adapter.command}`);
 }
@@ -293,7 +304,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
       const cliAdapter = getCliAdapter(session.cliId);
       const isCompacting = command?.name === "compact";
       const taskText = collaboration?.prompt ?? cliRequest?.prompt ?? resolved;
-      const prompt = buildBotPrompt(config.systemPrompt, taskText);
+      const prompt = buildBotPrompt(config, taskText, teamRegistry.contextFor(config.id));
       const taskCardTitle = isCompacting ? "整理上下文" : cliAdapter.displayName;
 
       console.log(`[收到] chat=${msg.chatId} threadId=${msg.threadId} rootId=${msg.rootId} sender=${msg.senderOpenId}`);
@@ -316,6 +327,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
           msg.messageId,
           [
             "/status 查看当前会话",
+            "/team 查看当前 Agent 团队",
             "/new 开启一个全新的 CLI 会话",
             "/resume 选择当前工作目录中的 CLI 会话",
             "/compact [要求] 使用当前引擎原生整理上下文",
@@ -326,6 +338,27 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
             "/claude <任务> 新话题使用 Claude Code",
             "/codex <任务> 新话题使用 Codex",
           ].join("\n"),
+          hasThread,
+        );
+        return;
+      }
+      if (command?.name === "team") {
+        await bot.replyCard(
+          msg.messageId,
+          buildTeamCard({
+            members: teamRegistry.members.map((member) => {
+              const runtime = botRuntimes.get(member.id);
+              return {
+                id: member.id,
+                displayName: runtime?.identity.name ?? member.id,
+                role: member.role,
+                cliName: getCliAdapter(member.defaultCliId).displayName,
+                skills: member.skills,
+                isLeader: member.id === teamRegistry.leaderBotId,
+                ready: !!runtime,
+              };
+            }),
+          }),
           hasThread,
         );
         return;

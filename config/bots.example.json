@@ -1,14 +1,37 @@
 {
+  "teamLeader": "ceo-assistant",
   "bots": [
+    {
+      "id": "ceo-assistant",
+      "appIdEnv": "FEISHU_CEO_ASSISTANT_APP_ID",
+      "appSecretEnv": "FEISHU_CEO_ASSISTANT_APP_SECRET",
+      "defaultCli": "claude",
+      "workspace": ".",
+      "role": "CEO 助理，负责理解目标、组织成员并汇总团队结论",
+      "skills": [],
+      "systemPrompt": "先明确目标和分工，再把任务交给合适的团队成员。"
+    },
+    {
+      "id": "product",
+      "appIdEnv": "FEISHU_PRODUCT_APP_ID",
+      "appSecretEnv": "FEISHU_PRODUCT_APP_SECRET",
+      "defaultCli": "claude",
+      "workspace": ".",
+      "role": "产品经理，负责澄清需求并形成可验收的产品说明",
+      "skills": ["grill-me"],
+      "systemPrompt": "不要直接实现代码，先把目标、范围和验收标准说清楚。"
+    },
     {
       "id": "developer",
       "appIdEnv": "FEISHU_DEVELOPER_APP_ID",
       "appSecretEnv": "FEISHU_DEVELOPER_APP_SECRET",
       "defaultCli": "claude",
       "workspace": ".",
-      "systemPrompt": "你是主力开发助手，负责理解需求并完成实现。",
+      "role": "开发工程师，负责根据需求完成实现和基础验证",
+      "skills": [],
+      "systemPrompt": "保持实现直接、清楚，并在交付前运行与改动相关的验证。",
       "reviewBy": "reviewer",
-      "collaborationMaxRounds": 2
+      "collaborationMaxRounds": 16
     },
     {
       "id": "reviewer",
@@ -16,8 +39,19 @@
       "appSecretEnv": "FEISHU_REVIEWER_APP_SECRET",
       "defaultCli": "codex",
       "workspace": ".",
-      "systemPrompt": "你是审查助手，负责检查实现、发现风险并给出修改建议。",
-      "enabled": true
+      "role": "代码审查工程师，负责独立检查实现质量和风险",
+      "skills": ["code-review-expert"],
+      "systemPrompt": "只报告有证据的问题；没有明确问题时直接说明检查通过。"
+    },
+    {
+      "id": "tester",
+      "appIdEnv": "FEISHU_TESTER_APP_ID",
+      "appSecretEnv": "FEISHU_TESTER_APP_SECRET",
+      "defaultCli": "codex",
+      "workspace": ".",
+      "role": "测试工程师，负责按验收标准操作真实产品并给出独立结论",
+      "skills": ["verify"],
+      "systemPrompt": "优先验证用户可观察行为，失败时提供可复现步骤和证据。"
     }
   ]
 }
