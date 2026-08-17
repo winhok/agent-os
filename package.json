@@ -9,7 +9,8 @@
     "start": "tsx watch --include .env --include 'config/*.json' src/index.ts",
     "start:once": "tsx src/index.ts",
     "build": "tsc",
-    "probe:cli": "tsx src/probe-cli.ts"
+    "probe:cli": "tsx src/probe-cli.ts",
+    "probe:tool": "tsx src/probe-app-tool.ts"
   },
   "engines": {
     "node": ">=22"
@@ -20,6 +21,7 @@
   "packageManager": "pnpm@11.22.0",
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.73.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "dotenv": "^17.4.2",
     "zod": "^4.4.3"
   },
