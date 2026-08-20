@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 const WorkspaceDocumentPathSchema = z
@@ -16,6 +17,25 @@ export const ProductSpecRequestSchema = z.object({
 
 export type ProductSpecRequest = z.infer<typeof ProductSpecRequestSchema>;
 
+export interface ProductSpecFlow {
+  token: string;
+  taskId: string;
+  botId: string;
+  ownerOpenId: string;
+  ownerUnionId?: string;
+  request: ProductSpecRequest;
+  status: "pending" | "approved" | "expired";
+  approvedAt?: string;
+}
+
+export interface CreateProductSpecFlowOptions {
+  taskId: string;
+  botId: string;
+  ownerOpenId: string;
+  ownerUnionId?: string;
+  request: ProductSpecRequest;
+}
+
 export function findProductSpecRequest(
   toolCalls: Array<{ toolName: string; input: unknown }> | undefined,
 ): ProductSpecRequest | undefined {
@@ -26,4 +46,45 @@ export function findProductSpecRequest(
     if (parsed.success) return parsed.data;
   }
   return undefined;
+}
+
+export function isProductSpecOwner(
+  flow: Pick<ProductSpecFlow, "ownerOpenId" | "ownerUnionId">,
+  operator: { operatorOpenId: string; operatorUnionId?: string },
+): boolean {
+  if (flow.ownerUnionId && operator.operatorUnionId) {
+    return flow.ownerUnionId === operator.operatorUnionId;
+  }
+  return flow.ownerOpenId === operator.operatorOpenId;
+}
+
+export class ProductSpecFlowStore {
+  private readonly flows = new Map<string, ProductSpecFlow>();
+
+  create(options: CreateProductSpecFlowOptions): ProductSpecFlow {
+    for (const flow of this.flows.values()) {
+      if (flow.taskId === options.taskId && flow.botId === options.botId && flow.status === "pending") {
+        flow.status = "expired";
+      }
+    }
+    const flow: ProductSpecFlow = {
+      token: randomUUID().replaceAll("-", ""),
+      ...options,
+      status: "pending",
+    };
+    this.flows.set(flow.token, flow);
+    return flow;
+  }
+
+  get(token: string): ProductSpecFlow | undefined {
+    return this.flows.get(token);
+  }
+
+  approve(token: string): ProductSpecFlow | undefined {
+    const flow = this.flows.get(token);
+    if (!flow || flow.status !== "pending") return undefined;
+    flow.status = "approved";
+    flow.approvedAt = new Date().toISOString();
+    return flow;
+  }
 }
