@@ -5,6 +5,8 @@ import { startBot, type Bot } from "./im/lark.js";
 import {
   answerContinuation,
   answerNeedsContinuation,
+  buildClarificationCard,
+  buildClarificationSupersededCard,
   buildCollaborationCard,
   buildSessionNoticeCard,
   buildTaskCard,
@@ -17,8 +19,10 @@ import { SessionManager } from "./core/session-manager.js";
 import { JsonSessionStore } from "./core/session-store.js";
 import { TaskProgressTracker } from "./core/task-progress.js";
 import type { ActiveRun } from "./core/task-abort.js";
+import { ClarificationFlowStore, findClarificationRequest, formatClarificationMessage } from "./core/clarification.js";
+import { topicTaskId } from "./core/topic-task.js";
 import { CollaborationInbox, collaborationTurnKey, type CollaborationMessage } from "./core/collaboration.js";
-import { ensureWorkspaceDirectory, resolveWorkspacePath } from "./core/workspace.js";
+import { ensureWorkspaceDirectory } from "./core/workspace.js";
 import { buildBotPrompt, loadAgentOsConfig, type BotConfig } from "./core/bot-registry.js";
 import { TeamRegistry } from "./core/team-registry.js";
 import { getCliAdapter, listCliAdapters } from "./cli/registry.js";
@@ -37,7 +41,7 @@ const teamRegistry = new TeamRegistry(agentOsConfig.teamLeaderId, botConfigs);
 await Promise.all(botConfigs.map((config) => ensureWorkspaceDirectory(config.workspaceDir)));
 for (const missing of await teamRegistry.findMissingSkills()) {
   console.warn(
-    `[Skill] bot=${missing.botId} 找不到 $${missing.skill}，请安装到当前工作目录的 .agents/skills 或 .claude/skills`,
+    `[Skill] bot=${missing.botId} 找不到 ${missing.skill}，请安装到当前工作目录的 .agents/skills 或 .claude/skills`,
   );
 }
 const defaultWorkspaces = Object.fromEntries(botConfigs.map((config) => [config.id, config.workspaceDir]));
@@ -49,6 +53,7 @@ const contextWindows = new Map<string, number>();
 const botRuntimes = new Map<string, BotRuntime>();
 const processedCollaborationTurns = new Set<string>();
 const collaborationInbox = new CollaborationInbox();
+const clarificationFlows = new ClarificationFlowStore();
 const runtime: AppRuntime = {
   sessions,
   teamRegistry,
@@ -57,6 +62,7 @@ const runtime: AppRuntime = {
   botRuntimes,
   processedCollaborationTurns,
   collaborationInbox,
+  clarificationFlows,
 };
 
 console.log("Agent OS 启动，正在建立飞书长连接…");
@@ -133,6 +139,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
     onCardAction: createCardActionHandler({ runtime, config }),
     onMessage: async (msg, bot) => {
       const resolved = resolveMentions(msg.text, msg.mentions);
+      const taskId = topicTaskId(msg);
       let senderRuntime: BotRuntime | undefined;
       let collaboration: CollaborationMessage | undefined;
       if (msg.senderType === "app" || msg.senderType === "bot") {
@@ -173,6 +180,10 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
         );
         return;
       }
+      const pendingClarification =
+        msg.senderType !== "app" && msg.senderType !== "bot" && !command
+          ? clarificationFlows.findForTask(taskId, config.id)
+          : undefined;
       const resolvedSession = await sessions.resolve(
         msg,
         cliRequest?.cliId ?? config.defaultCliId,
@@ -186,7 +197,9 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
       }
       const cliAdapter = getCliAdapter(session.cliId);
       const isCompacting = command?.name === "compact";
-      const taskText = collaboration?.prompt ?? cliRequest?.prompt ?? resolved;
+      const taskText = pendingClarification
+        ? formatClarificationMessage(pendingClarification, cliRequest?.prompt ?? resolved)
+        : (collaboration?.prompt ?? cliRequest?.prompt ?? resolved);
       const prompt = buildBotPrompt(config, taskText, teamRegistry.contextFor(config.id));
       const taskCardTitle = isCompacting ? "整理上下文" : cliAdapter.displayName;
       console.log(`[收到] chat=${msg.chatId} threadId=${msg.threadId} rootId=${msg.rootId} sender=${msg.senderOpenId}`);
@@ -220,6 +233,23 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
       if (session.status === "active") {
         await bot.reply(msg.messageId, "当前会话还在执行，请等任务结束后再追问。", hasThread);
         return;
+      }
+
+      if (pendingClarification) {
+        clarificationFlows.delete(pendingClarification.token);
+        if (pendingClarification.cardMessageId) {
+          try {
+            await bot.updateCard(
+              pendingClarification.cardMessageId,
+              buildClarificationSupersededCard(pendingClarification),
+            );
+          } catch (error) {
+            console.warn(
+              "[澄清] 旧卡片更新失败，继续处理用户的新消息:",
+              (error as Error).message,
+            );
+          }
+        }
       }
 
       if (collaboration && session.workspaceDir !== collaboration.workspaceDir) {
@@ -310,6 +340,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
             answer: result.message ?? "",
             sessionId: result.sessionId,
             stats: undefined,
+            toolCalls: undefined,
           }))
         : executeCli(cliAdapter, prompt, session.workspaceDir, session.cliSessionId, run.signal, (event) => {
             if (event.type !== "tool_start" && event.type !== "tool_end" && event.type !== "context") return;
@@ -325,6 +356,37 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
           }
           if (!isCompacting && result.stats?.contextWindowTokens) {
             contextWindows.set(session.id, result.stats.contextWindowTokens);
+          }
+          const clarificationRequest =
+            !isCompacting && config.skills.includes("grill-me")
+              ? findClarificationRequest(result.toolCalls)
+              : undefined;
+          if (clarificationRequest) {
+            const flow = clarificationFlows.create({
+              taskId,
+              botId: config.id,
+              sessionId: session.id,
+              ownerOpenId: msg.senderOpenId,
+              ownerUnionId: msg.senderUnionId,
+              originalMessageId: msg.messageId,
+              cardMessageId: cardId,
+              replyInThread: hasThread,
+              request: clarificationRequest,
+            });
+            if (activeRuns.get(session.id)?.controller === run) {
+              activeRuns.delete(session.id);
+            }
+            await markSessionIdle(sessions, session.id);
+            await cardUpdater.finish(buildClarificationCard({ flow }));
+            await sendResultNotification({
+              bot,
+              replyToMessageId: msg.messageId,
+              target: { openId: flow.ownerOpenId, name: "" },
+              text: `需要你确认 ${clarificationRequest.questions.length} 个问题，请在上方卡片中选择。`,
+              replyInThread: hasThread,
+            });
+            console.log(`[澄清] 已发送交互卡片 questions=${clarificationRequest.questions.length}`);
+            return;
           }
           const snapshot = progress.snapshot();
           await cardUpdater.finish(
@@ -363,7 +425,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
               replyInThread: hasThread,
             });
           }
-          if (!isCompacting) {
+          if (!isCompacting && !config.skills.includes("grill-me")) {
             try {
               if (collaboration && collaboration.round < collaboration.maxRounds) {
                 await sendCollaborationMessage({
@@ -480,7 +542,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
   });
   const identity = await startedBot.getIdentity();
   const botRuntime = { config, bot: startedBot, identity };
-  botRuntimes.set(config.id, botRuntime);
+ botRuntimes.set(config.id, botRuntime);
   console.log(`[Bot ${config.id.toUpperCase()}] 已连接 name=${identity.name} open_id=${identity.openId}`);
 }
 

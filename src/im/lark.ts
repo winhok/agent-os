@@ -14,6 +14,7 @@ export interface IncomingMessage {
   threadId: string;
   senderType: string;
   senderOpenId: string;
+  senderUnionId: string;
   mentions: Mention[];
   rawContent: string;
 }
@@ -30,10 +31,23 @@ export interface BotIdentity {
   name: string;
 }
 
+export const FEISHU_TEXT_LIMIT = 3_000;
+export const FEISHU_MENTION_LIMIT = 1_200;
+
+export function fitFeishuText(text: string, maxLength: number): string {
+  const characters = Array.from(text);
+  if (characters.length <= maxLength) return text;
+  const suffix = "\n\n（内容过长，已截断。详细内容请写入文档或工作区文件。）";
+  const suffixLength = Array.from(suffix).length;
+  return `${characters.slice(0, Math.max(0, maxLength - suffixLength)).join("")}${suffix}`;
+}
+
 export interface CardAction {
   operatorOpenId: string;
+  operatorUnionId: string;
   messageId: string;
   value: Record<string, unknown>;
+  formValue: Record<string, unknown>;
 }
 
 export interface CardActionResponse {
@@ -43,10 +57,13 @@ export interface CardActionResponse {
 
 export function parseCardAction(data: any): CardAction {
   const value = data?.action?.value;
+  const formValue = data?.action?.form_value;
   return {
     operatorOpenId: data?.operator?.open_id ?? data?.operator_id?.open_id ?? "",
+    operatorUnionId: data?.operator?.union_id ?? data?.operator_id?.union_id ?? "",
     messageId: data?.context?.open_message_id ?? data?.open_message_id ?? "",
     value: isRecord(value) ? value : {},
+    formValue: isRecord(formValue) ? formValue : {},
   };
 }
 
@@ -72,6 +89,7 @@ export interface Bot {
 }
 
 export function buildMentionPostContent(target: BotIdentity, text: string): Record<string, unknown> {
+  const boundedText = fitFeishuText(text, FEISHU_MENTION_LIMIT);
   return {
     zh_cn: {
       title: "",
@@ -82,7 +100,7 @@ export function buildMentionPostContent(target: BotIdentity, text: string): Reco
             user_id: target.openId,
             ...(target.name ? { user_name: target.name } : {}),
           },
-          { tag: "text", text: ` ${text}` },
+          { tag: "text", text: ` ${boundedText}` },
         ],
       ],
     },
@@ -169,7 +187,7 @@ export function startBot(opts: BotOptions): Bot {
         path: { message_id: messageId },
         data: {
           msg_type: "text",
-          content: JSON.stringify({ text }),
+          content: JSON.stringify({ text: fitFeishuText(text, FEISHU_TEXT_LIMIT) }),
           ...(replyInThread ? { reply_in_thread: true } : {}),
         },
       });
@@ -238,6 +256,7 @@ export function startBot(opts: BotOptions): Bot {
         threadId: m.thread_id ?? "",
         senderType: data.sender.sender_type ?? "",
         senderOpenId: data.sender.sender_id?.open_id ?? "",
+        senderUnionId: data.sender.sender_id?.union_id ?? "",
         mentions: parseMentions(m.mentions),
         rawContent: m.content,
       };
