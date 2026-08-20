@@ -6,7 +6,7 @@ import {
   buildProductSpecExpiredCard,
   buildResumeCard,
 } from "../im/card.js";
-import type { BotConfig } from "../core/bot-registry.js";
+import type { BotConfig, ProductDeliveryMode } from "../core/bot-registry.js";
 import { isClarificationOwner } from "../core/clarification.js";
 import { isProductSpecOwner } from "../core/product-spec.js";
 import { requestTaskAbort } from "../core/task-abort.js";
@@ -18,8 +18,9 @@ import type { AppRuntime } from "./runtime.js";
 export function createCardActionHandler(options: {
   runtime: AppRuntime;
   config: BotConfig;
+  defaultProductDeliveryMode: ProductDeliveryMode;
 }): (action: CardAction) => Promise<CardActionResponse | undefined> {
-  const { runtime, config } = options;
+  const { runtime, config, defaultProductDeliveryMode } = options;
   return async (action) => {
     if (action.value.action === "approve_product_spec") {
       const flowToken = typeof action.value.flowToken === "string" ? action.value.flowToken : "";
@@ -141,6 +142,7 @@ export function createCardActionHandler(options: {
             config,
             flow: answered.flow,
             run,
+            defaultDeliveryMode: defaultProductDeliveryMode,
           }).catch((error) => {
             console.error("[澄清] 继续执行失败:", (error as Error).message);
           });

@@ -1,10 +1,17 @@
 export type CliId = "claude" | "codex";
 
+export type CliPromptInput = "argument" | "stdin";
+
+export function promptInputForPlatform(platform: NodeJS.Platform): CliPromptInput {
+  return platform === "win32" ? "stdin" : "argument";
+}
+
 export type CliCompactPlan =
   | {
       protocol: "claude-stream-json";
       command: string;
       args: string[];
+      prompt: string;
     }
   | {
       protocol: "codex-app-server";
@@ -49,8 +56,8 @@ export interface CliAdapter {
   readonly id: CliId;
   readonly command: string;
   readonly displayName: string;
-  buildArgs(prompt: string): string[];
-  buildResumeArgs(prompt: string, sessionId: string): string[];
+  buildArgs(prompt: string, promptInput: CliPromptInput): string[];
+  buildResumeArgs(prompt: string, sessionId: string, promptInput: CliPromptInput): string[];
   buildCompactPlan(sessionId: string, instructions?: string): CliCompactPlan;
   parseEvents(line: string): CliEvent[];
 }

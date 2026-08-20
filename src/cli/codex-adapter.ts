@@ -1,4 +1,4 @@
-import type { CliAdapter, CliEvent, CliRunStats } from "./types.js";
+import type { CliAdapter, CliPromptInput, CliEvent, CliRunStats } from "./types.js";
 import { CLARIFICATION_TOOL_NAME, PRODUCT_SPEC_TOOL_NAME, codexAppToolArgs } from "./app-tools.js";
 
 interface CodexEvent {
@@ -105,12 +105,26 @@ export class CodexAdapter implements CliAdapter {
   readonly command = "codex";
   readonly displayName = "Codex";
 
-  buildArgs(prompt: string): string[] {
-    return [...codexAppToolArgs(), "exec", "--yolo", "--json", "--skip-git-repo-check", prompt];
+  buildArgs(prompt: string, promptInput: CliPromptInput): string[] {
+    const args = [...codexAppToolArgs(), "exec", "--json", "--skip-git-repo-check"];
+    if (process.platform === "win32") {
+      args.push("--dangerously-bypass-approvals-and-sandbox");
+    } else {
+      args.push("--yolo");
+    }
+    args.push(promptInput === "stdin" ? "-" : prompt);
+    return args;
   }
 
-  buildResumeArgs(prompt: string, sessionId: string): string[] {
-    return [...codexAppToolArgs(), "exec", "resume", "--yolo", "--json", "--skip-git-repo-check", sessionId, prompt];
+  buildResumeArgs(prompt: string, sessionId: string, promptInput: CliPromptInput): string[] {
+    const args = [...codexAppToolArgs(), "exec", "resume", "--json", "--skip-git-repo-check", sessionId];
+    if (process.platform === "win32") {
+      args.push("--dangerously-bypass-approvals-and-sandbox");
+    } else {
+      args.push("--yolo");
+    }
+    args.push(promptInput === "stdin" ? "-" : prompt);
+    return args;
   }
 
   buildCompactPlan(sessionId: string) {

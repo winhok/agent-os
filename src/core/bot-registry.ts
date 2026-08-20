@@ -44,7 +44,7 @@ const BotSchema = z.object({
     .string()
     .regex(/^[a-z0-9][a-z0-9_-]{0,31}$/)
     .optional(),
-  collaborationMaxRounds: z.number().int().min(1).max(32).optional().default(2),
+  collaborationMaxRounds: z.number().int().min(1).max(32).optional().default(16),
   enabled: z.boolean().optional().default(true),
 });
 
@@ -155,20 +155,11 @@ export function buildBotPrompt(
         "产品方案交付规则（必须遵守）：",
         `- 当前默认交付方式：${defaultProductDeliveryMode}。`,
         "- 用户明确指定本地 Markdown 或飞书云文档时，以用户本次选择覆盖默认值。",
-        "- 不要为了选择交付格式单独发起澄清。提交方案时必须写入最终采用的 deliveryMode。",
+        "- 不要为了选择交付格式单独发起澄清。",
+        "- 方案产物完成后必须实际调用 request_spec_approval，并提交最终采用的 deliveryMode 与对应产物字段。",
+        "- 不能只在普通回复中罗列 deliveryMode、documentUrl、specPath 或 ticketsPath。工具调用成功后停止本轮。",
       ].join("\n")
     : "";
-  const projectSkillPolicy =
-    config.skills.length > 0
-      ? [
-          "项目 Skill 加载规则（优先级不可颠倒）：",
-          "- 先读取当前工作区 `.agents/skills/<skill>/SKILL.md`。",
-          "- 不存在时再读取 `.claude/skills/<skill>/SKILL.md`。",
-          "- 只有两个工作区路径都不存在时，才允许回退到用户级或全局同名 Skill。",
-          `本次必须执行：${config.skills.map((skill) => `$${skill}`).join("、")}`,
-        ].join("\n")
-      : "";
-
   const feishuOutputPolicy = [
     "飞书输出规则（必须遵守）：",
     "- 最终回复控制在 1200 个中文字符以内，先给结论，再给必要依据和下一步。",

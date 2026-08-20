@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { killCli, spawnCli } from "./spawn-cli.js";
 import { createInterface } from "node:readline";
 import type { CliAdapter, CliCompactPlan } from "./types.js";
 
@@ -57,10 +57,14 @@ function runClaudeCompact(
       reject(new Error(`${options.adapter.displayName} 上下文整理已取消`));
       return;
     }
-    const child = spawn(plan.command, plan.args, {
+    const child = spawnCli(plan.command, plan.args, {
       cwd: options.cwd,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
     });
+    if (child.stdin) {
+      child.stdin.write(`${plan.prompt}\n`, "utf8");
+      child.stdin.end();
+    }
     const lines = createInterface({ input: child.stdout });
     let stderr = "";
     let completed = false;
@@ -75,7 +79,7 @@ function runClaudeCompact(
       if (settled) return;
       settled = true;
       cleanup();
-      child.kill("SIGTERM");
+      killCli(child);
       reject(error);
     };
     const abort = () => fail(new Error(`${options.adapter.displayName} 上下文整理已取消`));
@@ -140,7 +144,7 @@ function runCodexCompact(
       reject(new Error(`${options.adapter.displayName} 上下文整理已取消`));
       return;
     }
-    const child = spawn(plan.command, plan.args, {
+    const child = spawnCli(plan.command, plan.args, {
       cwd: options.cwd,
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -159,14 +163,14 @@ function runCodexCompact(
       if (settled) return;
       settled = true;
       cleanup();
-      child.kill("SIGTERM");
+      killCli(child);
       reject(error);
     };
     const succeed = () => {
       if (settled) return;
       settled = true;
       cleanup();
-      child.kill("SIGTERM");
+      killCli(child);
       resolve({ sessionId: options.sessionId, compacted: true });
     };
     const abort = () => fail(new Error(`${options.adapter.displayName} 上下文整理已取消`));

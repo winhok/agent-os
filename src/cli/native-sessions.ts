@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { killCli, spawnCli } from "./spawn-cli.js";
 import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -113,7 +113,7 @@ function protocolError(message: JsonMessage): string | undefined {
 
 function listCodexSessions(options: ListNativeCliSessionsOptions): Promise<CliSessionSummary[]> {
   return new Promise((resolve, reject) => {
-    const child = spawn(options.adapter.command, ["app-server", "--stdio"], {
+    const child = spawnCli(options.adapter.command, ["app-server", "--stdio"], {
       cwd: options.cwd,
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -129,14 +129,14 @@ function listCodexSessions(options: ListNativeCliSessionsOptions): Promise<CliSe
       if (settled) return;
       settled = true;
       cleanup();
-      child.kill("SIGTERM");
+      killCli(child);
       reject(error);
     };
     const succeed = (sessions: CliSessionSummary[]) => {
       if (settled) return;
       settled = true;
       cleanup();
-      child.kill("SIGTERM");
+      killCli(child);
       resolve(sessions);
     };
     const timer = setTimeout(() => fail(new Error("Codex 会话列表读取超时")), REQUEST_TIMEOUT_MS);

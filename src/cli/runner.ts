@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { killCli, spawnCli } from "./spawn-cli.js";
+import { promptInputForPlatform } from "./types.js";
 import { createInterface } from "node:readline";
 import type { CliAdapter, CliEvent, CliRunResult } from "./types.js";
 
@@ -16,15 +17,23 @@ export interface RunCliOptions {
 
 export function runCli(options: RunCliOptions): Promise<CliRunResult> {
   const { adapter, prompt, cwd, sessionId, signal, timeoutMs = DEFAULT_TIMEOUT_MS, onEvent } = options;
-
-  const args = sessionId ? adapter.buildResumeArgs(prompt, sessionId) : adapter.buildArgs(prompt);
+  const promptInput = promptInputForPlatform(process.platform);
+  const useStdin = promptInput === "stdin";
+  const args = sessionId
+    ? adapter.buildResumeArgs(prompt, sessionId, promptInput)
+    : adapter.buildArgs(prompt, promptInput);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(adapter.command, args, {
+    const child = spawnCli(adapter.command, args, {
       cwd,
       signal,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
     });
+    if (child.stdin) {
+      if (useStdin) child.stdin.end(prompt, "utf8");
+      else child.stdin.end();
+    }
+    signal?.addEventListener("abort", () => killCli(child), { once: true });
     const lines = createInterface({ input: child.stdout });
     let observedSessionId = sessionId;
     let observedAnswer: string | undefined;
@@ -38,7 +47,7 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
 
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
+      killCli(child);
     }, timeoutMs);
 
     const finish = () => clearTimeout(timer);

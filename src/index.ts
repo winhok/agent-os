@@ -1,18 +1,18 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import { basename, join, resolve } from "node:path";
-import { startBot, type Bot } from "./im/lark.js";
+import { startBot, type Bot, type IncomingDocumentComment } from "./im/lark.js";
 import {
   answerContinuation,
   answerNeedsContinuation,
   buildClarificationCard,
+  buildProductSpecApprovalCard,
   buildClarificationSupersededCard,
   buildCollaborationCard,
   buildSessionNoticeCard,
   buildTaskCard,
   splitLongText,
   ThrottledCardUpdater,
-  buildProductSpecApprovalCard,
 } from "./im/card.js";
 import { resolveMentions, extractResourceKeys } from "./im/message-parser.js";
 import { parseCliRequest, parseCommand } from "./core/command-parser.js";
@@ -21,10 +21,11 @@ import { JsonSessionStore } from "./core/session-store.js";
 import { TaskProgressTracker } from "./core/task-progress.js";
 import type { ActiveRun } from "./core/task-abort.js";
 import { ClarificationFlowStore, findClarificationRequest, formatClarificationMessage } from "./core/clarification.js";
-import { findProductSpecRequest, ProductSpecFlowStore } from "./core/product-spec.js";
+import type { ProductSpecRequest } from "./core/product-spec.js";
+import { JsonProductSpecFlowStore } from "./core/product-spec-store.js";
 import { topicTaskId } from "./core/topic-task.js";
 import { CollaborationInbox, collaborationTurnKey, type CollaborationMessage } from "./core/collaboration.js";
-import { ensureWorkspaceDirectory } from "./core/workspace.js";
+import { ensureWorkspaceDirectory, resolveWorkspacePath } from "./core/workspace.js";
 import { buildBotPrompt, loadAgentOsConfig, type BotConfig } from "./core/bot-registry.js";
 import { TeamRegistry } from "./core/team-registry.js";
 import { getCliAdapter, listCliAdapters } from "./cli/registry.js";
@@ -35,6 +36,8 @@ import { executeCli } from "./app/cli-execution.js";
 import { handleSessionCommand } from "./app/command-handler.js";
 import { sendResultNotification } from "./app/notification-service.js";
 import { markSessionIdle } from "./app/session-view.js";
+import { runProductDocumentComment } from "./app/product-comment-runner.js";
+import { ensureProductSpecSubmission } from "./app/product-spec-submission.js";
 import type { AppRuntime, BotRuntime } from "./app/runtime.js";
 
 const botConfigPath = resolve(process.env.BOTS_CONFIG ?? join("config", "bots.json"));
@@ -44,7 +47,7 @@ const teamRegistry = new TeamRegistry(agentOsConfig.teamLeaderId, botConfigs);
 await Promise.all(botConfigs.map((config) => ensureWorkspaceDirectory(config.workspaceDir)));
 for (const missing of await teamRegistry.findMissingSkills()) {
   console.warn(
-    `[Skill] bot=${missing.botId} 找不到 ${missing.skill}，请安装到当前工作目录的 .agents/skills 或 .claude/skills`,
+    `[Skill] bot=${missing.botId} 找不到 ${missing.skill}，请安装到工作区或用户级 Skills 目录`,
   );
 }
 const defaultWorkspaces = Object.fromEntries(botConfigs.map((config) => [config.id, config.workspaceDir]));
@@ -57,7 +60,10 @@ const botRuntimes = new Map<string, BotRuntime>();
 const processedCollaborationTurns = new Set<string>();
 const collaborationInbox = new CollaborationInbox();
 const clarificationFlows = new ClarificationFlowStore();
-const productSpecFlows = new ProductSpecFlowStore();
+const productSpecFlows = new JsonProductSpecFlowStore(join("data", "product-spec-flows.json"));
+const processedDocumentCommentEvents = new Set<string>();
+const documentCommentQueues = new Map<string, Promise<void>>();
+const MAX_REMEMBERED_DOCUMENT_COMMENT_EVENTS = 1_000;
 const runtime: AppRuntime = {
   sessions,
   teamRegistry,
@@ -141,7 +147,14 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
   const startedBot = startBot({
     appId: config.appId,
     appSecret: config.appSecret,
-    onCardAction: createCardActionHandler({ runtime, config }),
+    onCardAction: createCardActionHandler({
+      runtime,
+      config,
+      defaultProductDeliveryMode: agentOsConfig.defaultProductDeliveryMode,
+    }),
+    onDocumentComment: config.skills.includes("lark-drive")
+      ? async (comment, bot) => scheduleDocumentComment(config, bot, comment)
+      : undefined,
     onMessage: async (msg, bot) => {
       const resolved = resolveMentions(msg.text, msg.mentions);
       const taskId = topicTaskId(msg);
@@ -395,10 +408,37 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
             console.log(`[澄清] 已发送交互卡片 questions=${clarificationRequest.questions.length}`);
             return;
           }
-          const productSpecRequest =
-            !isCompacting && (config.skills.includes("to-spec") || config.skills.includes("lark-doc"))
-              ? findProductSpecRequest(result.toolCalls)
-              : undefined;
+          let finalResult = result;
+          let productSpecRequest: ProductSpecRequest | undefined;
+          const managesProductSpec =
+            !isCompacting && (config.skills.includes("to-spec") || config.skills.includes("lark-doc"));
+          if (managesProductSpec) {
+            const submission = await ensureProductSpecSubmission({
+              result,
+              defaultDeliveryMode: agentOsConfig.defaultProductDeliveryMode,
+              retry: (retryPrompt, resultSessionId) =>
+                executeCli(
+                  cliAdapter,
+                  retryPrompt,
+                  session.workspaceDir,
+                  resultSessionId ?? session.cliSessionId,
+                  run.signal,
+                  (event) => {
+                    if (event.type !== "tool_start" && event.type !== "tool_end" && event.type !== "context") return;
+                    progress.accept(event);
+                    renderProgress();
+                  },
+                ),
+            });
+            finalResult = submission.result;
+            productSpecRequest = submission.request;
+            if (finalResult.sessionId) {
+              await sessions.setCliSessionId(session.id, finalResult.sessionId);
+            }
+            if (finalResult.stats?.contextWindowTokens) {
+              contextWindows.set(session.id, finalResult.stats.contextWindowTokens);
+            }
+          }
           if (productSpecRequest) {
             if (productSpecRequest.deliveryMode === "local") {
               await assertProductSpecDocuments(session.workspaceDir, productSpecRequest);
@@ -410,6 +450,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
             const flow = productSpecFlows.create({
               taskId,
               botId: config.id,
+              sessionId: session.id,
               ownerOpenId: msg.senderOpenId,
               ownerUnionId: msg.senderUnionId,
               request: productSpecRequest,
@@ -430,10 +471,10 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
           await cardUpdater.finish(
             isCompacting
               ? buildSessionNoticeCard({
-                  title: result.answer ? "暂时无需整理" : "上下文已整理",
-                  template: result.answer ? "grey" : "green",
+                  title: finalResult.answer ? "暂时无需整理" : "上下文已整理",
+                  template: finalResult.answer ? "grey" : "green",
                   detail:
-                    result.answer ||
+                    finalResult.answer ||
                     [
                       `${cliAdapter.displayName} 已在当前 CLI 会话内完成原生压缩。`,
                       "CLI 会话 ID 保持不变，下一条任务会继续使用整理后的上下文。",
@@ -444,12 +485,12 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
                   status: "success",
                   detail: "执行完成",
                   progress: snapshot,
-                  answer: result.answer,
-                  stats: result.stats,
+                  answer: finalResult.answer,
+                  stats: finalResult.stats,
                 }),
           );
-          if (!isCompacting && answerNeedsContinuation(result.answer)) {
-            for (const chunk of splitLongText(answerContinuation(result.answer))) {
+          if (!isCompacting && answerNeedsContinuation(finalResult.answer)) {
+            for (const chunk of splitLongText(answerContinuation(finalResult.answer))) {
               await bot.reply(msg.messageId, chunk, hasThread);
             }
           }
@@ -581,7 +622,70 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
   const identity = await startedBot.getIdentity();
   const botRuntime = { config, bot: startedBot, identity };
   botRuntimes.set(config.id, botRuntime);
+  if (config.skills.includes("lark-drive")) {
+    await startedBot.subscribeToDocumentComments();
+  }
   console.log(`[Bot ${config.id.toUpperCase()}] 已连接 name=${identity.name} open_id=${identity.openId}`);
+}
+
+function scheduleDocumentComment(config: BotConfig, bot: Bot, comment: IncomingDocumentComment): void {
+  if (!comment.mentionedBot) return;
+  const flow = productSpecFlows.findPendingByDocument(config.id, comment.fileToken);
+  if (!flow) {
+    console.log(`[产品评论] 忽略未关联待确认方案的评论 file=${comment.fileToken}`);
+    return;
+  }
+
+  const eventKey = comment.eventId || [comment.fileToken, comment.commentId, comment.replyId].join(":");
+  if (processedDocumentCommentEvents.has(eventKey)) return;
+  rememberDocumentCommentEvent(eventKey);
+
+  const workingReaction = bot
+    .setDocumentCommentWorking(comment, true)
+    .then(() => true)
+    .catch((error) => {
+      console.warn("[产品评论] 添加处理中表情失败，继续执行:", (error as Error).message);
+      return false;
+    });
+  const previous = documentCommentQueues.get(flow.sessionId) ?? Promise.resolve();
+  const queued = Promise.all([previous.catch(() => undefined), workingReaction]).then(async ([, reactionAdded]) => {
+    try {
+      await runProductDocumentComment({
+        runtime,
+        bot,
+        flow,
+        comment,
+      });
+    } finally {
+      if (reactionAdded) {
+        await bot.setDocumentCommentWorking(comment, false).catch((error) => {
+          console.warn("[产品评论] 移除处理中表情失败:", (error as Error).message);
+        });
+      }
+    }
+  });
+  documentCommentQueues.set(flow.sessionId, queued);
+  void queued
+    .catch((error) => {
+      console.error("[产品评论] 处理失败:", (error as Error).message);
+      return bot
+        .replyToDocumentComment(comment, `这条评论暂时没有处理完成：${(error as Error).message}`)
+        .catch((replyError) => {
+          console.error("[产品评论] 回写失败:", (replyError as Error).message);
+        });
+    })
+    .finally(() => {
+      if (documentCommentQueues.get(flow.sessionId) === queued) {
+        documentCommentQueues.delete(flow.sessionId);
+      }
+    });
+}
+
+function rememberDocumentCommentEvent(eventKey: string): void {
+  processedDocumentCommentEvents.add(eventKey);
+  if (processedDocumentCommentEvents.size <= MAX_REMEMBERED_DOCUMENT_COMMENT_EVENTS) return;
+  const oldest = processedDocumentCommentEvents.values().next().value;
+  if (oldest) processedDocumentCommentEvents.delete(oldest);
 }
 
 await Promise.all(botConfigs.map(startConfiguredBot));

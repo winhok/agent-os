@@ -1,4 +1,5 @@
-import type { CliAdapter, CliEvent, CliRunStats } from "./types.js";
+import { promptInputForPlatform } from "./types.js";
+import type { CliAdapter, CliPromptInput, CliEvent, CliRunStats } from "./types.js";
 import {
   CLAUDE_CLARIFICATION_TOOL_NAME,
   CLAUDE_PRODUCT_SPEC_TOOL_NAME,
@@ -119,11 +120,11 @@ function parseStats(event: ClaudeEvent): CliRunStats | undefined {
   return Object.values(stats).some((value) => value !== undefined) ? stats : undefined;
 }
 
-function outputArgs(prompt: string): string[] {
+function outputArgs(prompt: string, promptInput: CliPromptInput): string[] {
   return [
     "--dangerously-skip-permissions",
     "-p",
-    prompt,
+    ...(promptInput === "argument" ? [prompt] : []),
     "--output-format",
     "stream-json",
     "--verbose",
@@ -136,12 +137,12 @@ export class ClaudeAdapter implements CliAdapter {
   readonly command = "claude";
   readonly displayName = "Claude Code";
 
-  buildArgs(prompt: string): string[] {
-    return outputArgs(prompt);
+  buildArgs(prompt: string, promptInput: CliPromptInput): string[] {
+    return outputArgs(prompt, promptInput);
   }
 
-  buildResumeArgs(prompt: string, sessionId: string): string[] {
-    return ["--resume", sessionId, ...outputArgs(prompt)];
+  buildResumeArgs(prompt: string, sessionId: string, promptInput: CliPromptInput): string[] {
+    return ["--resume", sessionId, ...outputArgs(prompt, promptInput)];
   }
 
   buildCompactPlan(sessionId: string, instructions?: string) {
@@ -149,7 +150,8 @@ export class ClaudeAdapter implements CliAdapter {
     return {
       protocol: "claude-stream-json" as const,
       command: this.command,
-      args: this.buildResumeArgs(command, sessionId),
+      prompt: command,
+      args: this.buildResumeArgs(command, sessionId, promptInputForPlatform(process.platform)),
     };
   }
 

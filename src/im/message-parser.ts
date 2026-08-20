@@ -16,7 +16,7 @@ export function parseMentions(raw: any[] | undefined): Mention[] {
 export function resolveMentions(text: string, mentions: Mention[]): string {
   let resolved = text;
   for (const m of mentions) {
-    resolved = resolved.replace(m.key, `@${m.name}`);
+    resolved = resolved.replaceAll(m.key, `@${m.name}`);
   }
   return resolved.trim();
 }
