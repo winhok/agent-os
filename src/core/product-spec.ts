@@ -8,14 +8,34 @@ const WorkspaceDocumentPathSchema = z
   .max(240)
   .refine((value) => !value.startsWith("/") && !value.split(/[\\/]/).includes(".."), "文档路径必须位于当前工作目录内");
 
-export const ProductSpecRequestSchema = z.object({
+const ProductSpecBaseSchema = z.object({
   title: z.string().trim().min(1).max(80),
   summary: z.string().trim().min(1).max(500),
-  specPath: WorkspaceDocumentPathSchema,
-  ticketsPath: WorkspaceDocumentPathSchema,
 });
 
+const LarkDocumentUrlSchema = z
+  .url()
+  .refine((value) => /\/(?:docx|wiki)\//.test(new URL(value).pathname), "documentUrl 必须是飞书云文档或知识库文档链接");
+
+export const LocalProductSpecRequestSchema = ProductSpecBaseSchema.extend({
+  deliveryMode: z.literal("local"),
+  specPath: WorkspaceDocumentPathSchema,
+  ticketsPath: WorkspaceDocumentPathSchema,
+}).strict();
+
+export const LarkProductSpecRequestSchema = ProductSpecBaseSchema.extend({
+  deliveryMode: z.literal("lark-doc"),
+  documentUrl: LarkDocumentUrlSchema,
+}).strict();
+
+export const ProductSpecRequestSchema = z.discriminatedUnion("deliveryMode", [
+  LocalProductSpecRequestSchema,
+  LarkProductSpecRequestSchema,
+]);
+
 export type ProductSpecRequest = z.infer<typeof ProductSpecRequestSchema>;
+
+export type LocalProductSpecRequest = z.infer<typeof LocalProductSpecRequestSchema>;
 
 export interface ProductSpecFlow {
   token: string;

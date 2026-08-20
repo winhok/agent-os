@@ -1,4 +1,5 @@
 import { access } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import type { BotConfig } from "./bot-registry.js";
 
@@ -57,6 +58,9 @@ export class TeamRegistry {
         const searchedPaths = [
           join(config.workspaceDir, ".agents", "skills", skill, "SKILL.md"),
           join(config.workspaceDir, ".claude", "skills", skill, "SKILL.md"),
+          join(homedir(), ".agents", "skills", skill, "SKILL.md"),
+          join(homedir(), ".claude", "skills", skill, "SKILL.md"),
+          join(homedir(), ".codex", "skills", skill, "SKILL.md"),
         ];
         if (!(await somePathExists(searchedPaths))) {
           missing.push({ botId: config.id, skill, searchedPaths });

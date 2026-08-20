@@ -35,11 +35,11 @@ server.registerTool(
   {
     title: "提交产品文档",
     description: [
-      "Spec 和 Tickets 已经写入当前工作区后，调用此工具提交待确认产物。",
-      "specPath 指向 Spec 文件，ticketsPath 指向包含独立 Ticket 文件的目录。",
-      "summary 只写便于快速了解方案的摘要，完整内容保留在文件中。",
-      "提交前必须完成需求澄清，确保这份方案已经可以确认。",
-      "调用后停止工作，不要实现代码或委派团队成员。",
+      "产品方案已经生成后，调用此工具提交唯一的待确认产物。",
+      "deliveryMode=local 时提交 specPath 与 ticketsPath，并确保文件真实存在。",
+      "deliveryMode=lark-doc 时只提交 documentUrl，且必须使用 lark-doc 创建或更新成功结果中的 document.url；该文档必须同时包含产品说明与「实现任务（Tickets）」章节。",
+      "同一份方案不要同时维护本地 Markdown 和飞书云文档，避免两个来源互相覆盖。",
+      "summary 只写便于快速了解方案的摘要，完整内容保留在所选产物中。",
     ].join(""),
     inputSchema: ProductSpecRequestSchema,
   },
@@ -47,7 +47,7 @@ server.registerTool(
     content: [
       {
         type: "text",
-        text: "产品文档已交给 Agent OS，等待用户查看。",
+        text: "唯一的产品方案产物已交给 Agent OS，等待用户查看。",
       },
     ],
   }),
