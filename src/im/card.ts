@@ -1,5 +1,6 @@
 import type { CliRunStats, CliSessionSummary } from "../cli/types.js";
 import type { ClarificationFlow } from "../core/clarification.js";
+import type { ProductSpecRequest } from "../core/product-spec.js";
 import type { TaskActivity, TaskProgressSnapshot } from "../core/task-progress.js";
 
 export type CardJson = Record<string, unknown>;
@@ -793,6 +794,50 @@ export function buildTeamCard(options: TeamCardOptions): CardJson {
         { tag: "hr" },
         ...memberElements,
       ],
+    },
+  };
+}
+
+export function buildProductSpecReadyCard(request: ProductSpecRequest): CardJson {
+  const elements: Record<string, unknown>[] = [
+    {
+      tag: "markdown",
+      content: [`**${escapeFeishuMarkdown(request.title)}**`, escapeFeishuMarkdown(request.summary)].join("\n\n"),
+    },
+    { tag: "hr" },
+    {
+      tag: "markdown",
+      content: [
+        "**真实产物**",
+        `📘 **Spec** · \`${escapeFeishuMarkdown(request.specPath)}\``,
+        `🎫 **Tickets** · \`${escapeFeishuMarkdown(request.ticketsPath)}\``,
+      ].join("\n"),
+    },
+  ];
+
+  elements.push({
+    tag: "markdown",
+    content: "_产品文档已经落盘，当前等待确认。本节不会自动交给开发。_",
+  });
+
+  return {
+    schema: "2.0",
+    config: {
+      update_multi: true,
+      summary: { content: `${request.title}：待确认` },
+    },
+    header: {
+      template: "blue",
+      title: { tag: "plain_text", content: "产品文档已生成" },
+      subtitle: {
+        tag: "plain_text",
+        content: "Spec · Tickets 待确认",
+      },
+    },
+    body: {
+      direction: "vertical",
+      vertical_spacing: "12px",
+      elements,
     },
   };
 }

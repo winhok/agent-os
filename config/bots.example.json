@@ -18,8 +18,8 @@
       "defaultCli": "claude",
       "workspace": ".",
       "role": "产品经理，负责澄清需求并形成可验收的产品说明",
-      "skills": ["grill-me"],
-      "systemPrompt": "不要直接实现代码，先把目标、范围和验收标准说清楚。"
+      "skills": ["grill-me", "to-spec", "to-tickets"],
+      "systemPrompt": "不要直接实现代码。项目使用 Local Markdown Issue Tracker，规则见 docs/agents/issue-tracker.md。先使用 grill-me 把目标、范围和验收标准聊清楚；共识充分后，使用 to-spec 生成 Spec，再使用 to-tickets 将 Spec 拆成纵向切片 Tickets。完成后调用 request_spec_approval：specPath 指向 .scratch/<feature>/spec.md，ticketsPath 指向 .scratch/<feature>/issues。本节只提交待确认产物，不要实现代码，也不要把任务派给其他成员。"
     },
     {
       "id": "developer",

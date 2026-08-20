@@ -1,5 +1,5 @@
 import type { CliAdapter, CliEvent, CliRunStats } from "./types.js";
-import { CLARIFICATION_TOOL_NAME, codexAppToolArgs } from "./app-tools.js";
+import { CLARIFICATION_TOOL_NAME, PRODUCT_SPEC_TOOL_NAME, codexAppToolArgs } from "./app-tools.js";
 
 interface CodexEvent {
   type?: unknown;
@@ -157,11 +157,15 @@ export class CodexAdapter implements CliAdapter {
           ...tool,
         },
       ];
-      if (item.type === "mcp_tool_call" && item.server === "agent_os" && item.tool === CLARIFICATION_TOOL_NAME) {
+      if (
+        item.type === "mcp_tool_call" &&
+        item.server === "agent_os" &&
+        (item.tool === CLARIFICATION_TOOL_NAME || item.tool === PRODUCT_SPEC_TOOL_NAME)
+      ) {
         events.push({
           type: "tool_call",
           toolUseId: item.id,
-          toolName: CLARIFICATION_TOOL_NAME,
+          toolName: item.tool,
           input: item.arguments ?? item.input,
         });
       }

@@ -6,6 +6,7 @@ import {
   answerContinuation,
   answerNeedsContinuation,
   buildClarificationCard,
+  buildProductSpecReadyCard,
   buildClarificationSupersededCard,
   buildCollaborationCard,
   buildSessionNoticeCard,
@@ -20,6 +21,7 @@ import { JsonSessionStore } from "./core/session-store.js";
 import { TaskProgressTracker } from "./core/task-progress.js";
 import type { ActiveRun } from "./core/task-abort.js";
 import { ClarificationFlowStore, findClarificationRequest, formatClarificationMessage } from "./core/clarification.js";
+import { findProductSpecRequest } from "./core/product-spec.js";
 import { topicTaskId } from "./core/topic-task.js";
 import { CollaborationInbox, collaborationTurnKey, type CollaborationMessage } from "./core/collaboration.js";
 import { ensureWorkspaceDirectory } from "./core/workspace.js";
@@ -28,6 +30,7 @@ import { TeamRegistry } from "./core/team-registry.js";
 import { getCliAdapter, listCliAdapters } from "./cli/registry.js";
 import { compactCliSession } from "./cli/native-compact.js";
 import { createCardActionHandler } from "./app/card-action-handler.js";
+import { assertProductSpecDocuments } from "./app/product-spec-documents.js";
 import { executeCli } from "./app/cli-execution.js";
 import { handleSessionCommand } from "./app/command-handler.js";
 import { sendResultNotification } from "./app/notification-service.js";
@@ -244,10 +247,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
               buildClarificationSupersededCard(pendingClarification),
             );
           } catch (error) {
-            console.warn(
-              "[澄清] 旧卡片更新失败，继续处理用户的新消息:",
-              (error as Error).message,
-            );
+            console.warn("[澄清] 旧卡片更新失败，继续处理用户的新消息:", (error as Error).message);
           }
         }
       }
@@ -388,6 +388,26 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
             console.log(`[澄清] 已发送交互卡片 questions=${clarificationRequest.questions.length}`);
             return;
           }
+          const productSpecRequest =
+            !isCompacting && config.skills.includes("to-spec") ? findProductSpecRequest(result.toolCalls) : undefined;
+          if (productSpecRequest) {
+            await assertProductSpecDocuments(session.workspaceDir, productSpecRequest);
+            if (activeRuns.get(session.id)?.controller === run) {
+              activeRuns.delete(session.id);
+            }
+            await markSessionIdle(sessions, session.id);
+            await cardUpdater.finish(buildProductSpecReadyCard(productSpecRequest));
+            await sendResultNotification({
+              bot,
+              replyToMessageId: msg.messageId,
+              target: { openId: msg.senderOpenId, name: "" },
+              text: "Spec 和 Tickets 已经落盘，请查看上方产物卡片。",
+              replyInThread: hasThread,
+            });
+            console.log("[产品文档] 已展示待确认产物");
+            return;
+          }
+
           const snapshot = progress.snapshot();
           await cardUpdater.finish(
             isCompacting
@@ -542,7 +562,7 @@ async function startConfiguredBot(config: BotConfig): Promise<void> {
   });
   const identity = await startedBot.getIdentity();
   const botRuntime = { config, bot: startedBot, identity };
- botRuntimes.set(config.id, botRuntime);
+  botRuntimes.set(config.id, botRuntime);
   console.log(`[Bot ${config.id.toUpperCase()}] 已连接 name=${identity.name} open_id=${identity.openId}`);
 }
 
