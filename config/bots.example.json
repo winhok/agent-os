@@ -28,31 +28,10 @@
       "appSecretEnv": "FEISHU_DEVELOPER_APP_SECRET",
       "defaultCli": "claude",
       "workspace": ".",
-      "role": "开发工程师，负责根据需求完成实现和基础验证",
-      "skills": [],
-      "systemPrompt": "保持实现直接、清楚，并在交付前运行与改动相关的验证。",
-      "reviewBy": "reviewer",
+      "role": "开发工程师，负责实现已确认方案，并在内部完成浏览器验收与代码审查",
+      "skills": ["implement-ticket"],
+      "systemPrompt": "只实现已经确认的产品方案。按照 implement-ticket 的顺序完成实现、基础验证、Tester 浏览器验收和 Code Reviewer 独立审查；发现问题时在当前开发会话中修复并重新验证，全部通过后再返回最终结果。",
       "collaborationMaxRounds": 16
-    },
-    {
-      "id": "reviewer",
-      "appIdEnv": "FEISHU_REVIEWER_APP_ID",
-      "appSecretEnv": "FEISHU_REVIEWER_APP_SECRET",
-      "defaultCli": "codex",
-      "workspace": ".",
-      "role": "代码审查工程师，负责独立检查实现质量和风险",
-      "skills": ["code-review-expert"],
-      "systemPrompt": "只报告有证据的问题；没有明确问题时直接说明检查通过。"
-    },
-    {
-      "id": "tester",
-      "appIdEnv": "FEISHU_TESTER_APP_ID",
-      "appSecretEnv": "FEISHU_TESTER_APP_SECRET",
-      "defaultCli": "codex",
-      "workspace": ".",
-      "role": "测试工程师，负责按验收标准操作真实产品并给出独立结论",
-      "skills": ["verify"],
-      "systemPrompt": "优先验证用户可观察行为，失败时提供可复现步骤和证据。"
     }
   ]
 }
