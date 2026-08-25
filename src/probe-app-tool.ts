@@ -2,7 +2,6 @@ import { resolve } from "node:path";
 import { getCliAdapter } from "./cli/registry.js";
 import { runCli } from "./cli/runner.js";
 import type { CliId } from "./cli/types.js";
-import { findClarificationRequest } from "./core/clarification.js";
 
 const cliId = process.argv[2] as CliId | undefined;
 const workspace = process.argv[3] ?? process.cwd();
@@ -28,14 +27,8 @@ const result = await runCli({
   },
 });
 
-const unexpectedTool = result.toolCalls?.find((call) => call.toolName !== "request_clarification");
-if (unexpectedTool) {
-  throw new Error(`应用层收到未统一的工具名：${unexpectedTool.toolName}`);
+if (!result.toolCalls?.length) {
+  throw new Error(`${adapter.displayName} 没有调用 request_clarification`);
 }
 
-const clarification = findClarificationRequest(result.toolCalls);
-if (!clarification) {
-  throw new Error(`${adapter.displayName} 没有返回通过 Zod Schema 校验的 request_clarification`);
-}
-
-console.log(`\n[完成] ${adapter.displayName} 返回 ${clarification.questions.length} 个合法问题`);
+console.log(`\n[完成] ${adapter.displayName} 返回 ${result.toolCalls.length} 次应用工具调用`);

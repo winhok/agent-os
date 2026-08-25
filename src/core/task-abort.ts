@@ -13,7 +13,7 @@ export function requestTaskAbort(
 ): AbortTaskOutcome {
   const active = activeRuns.get(sessionId);
   if (!active) return "not_found";
-  if (operatorOpenId !== active.ownerOpenId) return "forbidden";
+  if (!operatorOpenId) return "forbidden";
   if (active.controller.signal.aborted) return "already_stopping";
   active.cancelMode = "stop";
   active.controller.abort();

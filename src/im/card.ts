@@ -47,8 +47,11 @@ export interface TeamCardOptions {
 export interface CollaborationCardOptions {
   senderName: string;
   targetName: string;
+  reportToName: string;
   workspaceName: string;
-  prompt: string;
+  objective: string;
+  instruction: string;
+  expectedOutput?: string;
   round: number;
   maxRounds: number;
 }
@@ -334,10 +337,7 @@ export function buildTaskCard(options: TaskCardOptions): CardJson {
     },
     header: {
       template: style.template,
-      title: {
-        tag: "plain_text",
-        content: `${options.title} · ${style.label}`,
-      },
+      title: { tag: "plain_text", content: `${options.title} · ${style.label}` },
     },
     body: {
       direction: "vertical",
@@ -672,19 +672,17 @@ export function buildSessionNoticeCard(options: SessionNoticeCardOptions): CardJ
 }
 
 export function buildCollaborationCard(options: CollaborationCardOptions): CardJson {
-  const isReviewRequest = options.round === 1;
   const isLastRound = options.round >= options.maxRounds;
-  const title = isReviewRequest ? "代码审查已发起" : "审查意见已返回";
-  const action = isReviewRequest ? "请接手检查" : "请确认并处理反馈";
-  const description = isReviewRequest ? "开发任务已经完成，现在进入独立审查。" : "审查已经完成，反馈已交回开发侧。";
+  const title = "协作任务已派发";
   const footer = isLastRound
-    ? "这是本次协作的最后一轮，处理完成后流程结束。"
-    : `完成后，结果会自动交回 ${options.senderName}。`;
+    ? `这是当前任务允许的最后一次交接；结果会通知 ${options.reportToName}，由他决定下一步。`
+    : `完成后，结果会自动交回 ${options.reportToName} 继续组织后续工作。`;
+
   return {
     schema: "2.0",
     config: {
       update_multi: true,
-      summary: { content: `${title}：${options.senderName} → ${options.targetName}` },
+      summary: { content: `${title}：${options.objective}` },
     },
     header: {
       template: "blue",
@@ -700,7 +698,7 @@ export function buildCollaborationCard(options: CollaborationCardOptions): CardJ
       elements: [
         {
           tag: "markdown",
-          content: `**${options.targetName}，${action}**\n\n${description}`,
+          content: `**${options.targetName}，请接手：${escapeFeishuMarkdown(options.objective)}**`,
         },
         {
           tag: "column_set",
@@ -725,7 +723,7 @@ export function buildCollaborationCard(options: CollaborationCardOptions): CardJ
               elements: [
                 {
                   tag: "markdown",
-                  content: `**当前环节**\n${isReviewRequest ? "独立审查" : "处理反馈"}`,
+                  content: `**结果交给**\n${escapeFeishuMarkdown(options.reportToName)}`,
                 },
               ],
             },
@@ -734,16 +732,25 @@ export function buildCollaborationCard(options: CollaborationCardOptions): CardJ
         {
           tag: "collapsible_panel",
           expanded: false,
-          header: collapsibleHeader(isReviewRequest ? "查看审查说明" : "查看审查反馈"),
+          header: collapsibleHeader("查看任务说明"),
           vertical_spacing: "8px",
           padding: "8px 8px 8px 8px",
           elements: [
             {
               tag: "markdown",
-              content: escapeFeishuMarkdown(markdownPreview(options.prompt, MAX_CARD_ANSWER_LENGTH)),
+              content: escapeFeishuMarkdown(markdownPreview(options.instruction, MAX_CARD_ANSWER_LENGTH)),
             },
           ],
         },
+        ...(options.expectedOutput
+          ? [
+              { tag: "hr" },
+              {
+                tag: "markdown",
+                content: `**期望产出**\n${escapeFeishuMarkdown(options.expectedOutput)}`,
+              },
+            ]
+          : []),
         { tag: "hr" },
         { tag: "markdown", content: `_${footer}_` },
       ],
@@ -762,7 +769,7 @@ export function buildTeamCard(options: TeamCardOptions): CardJson {
       tag: "markdown",
       content: [
         `**${escapeFeishuMarkdown(member.displayName)}**  _${badges}_`,
-        escapeFeishuMarkdown(member.role),
+        `${escapeFeishuMarkdown(member.role)}`,
         `引擎：${escapeFeishuMarkdown(member.cliName)}　Skill：${escapeFeishuMarkdown(skills)}`,
       ].join("\n"),
     };
@@ -842,7 +849,7 @@ export function buildProductSpecApprovalCard(flow: ProductSpecFlow): CardJson {
 
   elements.push({
     tag: "markdown",
-    content: "_确认后只记录“产品方案已就绪”，本节不会自动交给开发。_",
+    content: "_确认后，已确认方案会交回 CEO 助理继续安排后续成员。_",
   });
 
   return {
@@ -890,7 +897,7 @@ export function buildProductSpecApprovedCard(flow: ProductSpecFlow): CardJson {
             escapeFeishuMarkdown(flow.request.summary),
             `**已确认文档**\n${productDocumentList(flow)}`,
             flow.approvedAt ? `确认时间：${escapeFeishuMarkdown(flow.approvedAt)}` : "",
-            "_本节到这里结束，不会自动派发开发任务。_",
+            "_确认结果已交回团队负责人，等待下一步安排。_",
           ]
             .filter(Boolean)
             .join("\n\n"),
@@ -950,6 +957,7 @@ export function splitLongText(text: string, maxLength = 4_000): string[] {
 
 type UpdateCard = (card: CardJson) => Promise<void>;
 
+/** 一秒窗口内无论 push 多少次，只提交最新的一张卡片。 */
 export class ThrottledCardUpdater {
   private pendingCard: CardJson | undefined;
   private timer: ReturnType<typeof setTimeout> | undefined;

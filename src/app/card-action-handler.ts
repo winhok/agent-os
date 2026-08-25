@@ -13,14 +13,16 @@ import { requestTaskAbort } from "../core/task-abort.js";
 import { getCliAdapter } from "../cli/registry.js";
 import { listNativeCliSessions } from "../cli/native-sessions.js";
 import { continueClarificationFlow } from "./clarification-runner.js";
+import type { CollaborationService } from "./collaboration-service.js";
 import type { AppRuntime } from "./runtime.js";
 
 export function createCardActionHandler(options: {
   runtime: AppRuntime;
   config: BotConfig;
+  collaborationService: CollaborationService;
   defaultProductDeliveryMode: ProductDeliveryMode;
 }): (action: CardAction) => Promise<CardActionResponse | undefined> {
-  const { runtime, config, defaultProductDeliveryMode } = options;
+  const { runtime, config, collaborationService, defaultProductDeliveryMode } = options;
   return async (action) => {
     if (action.value.action === "approve_product_spec") {
       const flowToken = typeof action.value.flowToken === "string" ? action.value.flowToken : "";
@@ -53,6 +55,49 @@ export function createCardActionHandler(options: {
       if (!approved) {
         return { toast: { type: "warning", content: "方案状态已经更新。" } };
       }
+      if (approved.collaboration) {
+        const botRuntime = runtime.botRuntimes.get(config.id);
+        if (!botRuntime) {
+          return { toast: { type: "error", content: "当前 Bot 尚未就绪。" } };
+        }
+        const collaboration = approved.collaboration;
+        const productDescription =
+          approved.request.deliveryMode === "lark-doc"
+            ? `文档 URL：${approved.request.documentUrl}`
+            : `Spec：${approved.request.specPath}\nTickets：${approved.request.ticketsPath}`;
+        try {
+          await collaborationService.dispatch({
+            senderConfig: config,
+            senderBot: botRuntime.bot,
+            replyToMessageId: action.messageId,
+            targetBotId: collaboration.reportToBotId,
+            taskId: collaboration.taskId,
+            ownerOpenId: approved.ownerOpenId,
+            ownerUnionId: approved.ownerUnionId,
+            reportToBotId: collaboration.reportToBotId,
+            objective: `产品方案已确认：${approved.request.title}`,
+            instruction: [
+              `${config.role} 已经完成产品方案，用户确认通过。`,
+              `方案标题：${approved.request.title}`,
+              `方案摘要：${approved.request.summary}`,
+              productDescription,
+              `确认记录：${approved.approvedAt ?? ""}`,
+              "请基于这份已确认方案继续组织后续工作：需要开发者实现时，使用 dispatch_task 把方案交给 developer。",
+            ].join("\n\n"),
+            expectedOutput: "继续推进原任务，或在已经完成时向用户给出最终结论。",
+            round: collaboration.round + 1,
+            maxRounds: collaboration.maxRounds,
+            workspaceDir: runtime.sessions.get(approved.sessionId)?.workspaceDir ?? config.workspaceDir,
+          });
+        } catch (error) {
+          return {
+            toast: {
+              type: "error",
+              content: `确认结果交回失败：${(error as Error).message}`,
+            },
+          };
+        }
+      }
       return {
         toast: { type: "success", content: "产品方案已确认。" },
         card: {
@@ -61,6 +106,7 @@ export function createCardActionHandler(options: {
         },
       };
     }
+
     if (action.value.action === "answer_clarification") {
       const flowToken = typeof action.value.flowToken === "string" ? action.value.flowToken : "";
       const questionId = typeof action.value.questionId === "string" ? action.value.questionId : "";
@@ -74,9 +120,7 @@ export function createCardActionHandler(options: {
 
       const question = flow.request.questions[flow.currentIndex];
       if (!question || question.id !== questionId) {
-        return {
-          toast: { type: "warning", content: "问题已经更新，请按当前卡片作答。" },
-        };
+        return { toast: { type: "warning", content: "问题已经更新，请按当前卡片作答。" } };
       }
 
       const decisionMode =
@@ -122,9 +166,7 @@ export function createCardActionHandler(options: {
         return { toast: { type: "error", content: "对应的 CLI 会话已经失效。" } };
       }
       if (session.status === "active") {
-        return {
-          toast: { type: "warning", content: "当前会话仍在执行，请稍后重试。" },
-        };
+        return { toast: { type: "warning", content: "当前会话仍在执行，请稍后重试。" } };
       }
 
       try {
@@ -167,14 +209,10 @@ export function createCardActionHandler(options: {
         return { toast: { type: "error", content: "这条会话记录已经失效。" } };
       }
       if (session.status === "active") {
-        return {
-          toast: { type: "warning", content: "当前任务结束后才能切换会话。" },
-        };
+        return { toast: { type: "warning", content: "当前任务结束后才能切换会话。" } };
       }
       if (session.status === "closed") {
-        return {
-          toast: { type: "warning", content: "当前话题的会话已经关闭。" },
-        };
+        return { toast: { type: "warning", content: "当前话题的会话已经关闭。" } };
       }
       try {
         const cliAdapter = getCliAdapter(session.cliId);
@@ -184,10 +222,7 @@ export function createCardActionHandler(options: {
         });
         if (!nativeSessions.some((item) => item.id === cliSessionId)) {
           return {
-            toast: {
-              type: "error",
-              content: "这个 CLI 会话已经不在当前工作目录中。",
-            },
+            toast: { type: "error", content: "这个 CLI 会话已经不在当前工作目录中。" },
           };
         }
         const updated = await runtime.sessions.setCliSessionId(session.id, cliSessionId);
@@ -212,14 +247,10 @@ export function createCardActionHandler(options: {
     const sessionId = typeof action.value.sessionId === "string" ? action.value.sessionId : "";
     const outcome = requestTaskAbort(runtime.activeRuns, sessionId, action.operatorOpenId);
     if (outcome === "not_found") {
-      return {
-        toast: { type: "info", content: "任务已经结束，无需再次停止。" },
-      };
+      return { toast: { type: "info", content: "任务已经结束，无需再次停止。" } };
     }
     if (outcome === "forbidden") {
-      return {
-        toast: { type: "warning", content: "只有任务发起人可以停止它。" },
-      };
+      return { toast: { type: "warning", content: "无法识别操作者，无法停止任务。" } };
     }
     if (outcome === "already_stopping") {
       return { toast: { type: "info", content: "正在停止任务，请稍候。" } };

@@ -34,8 +34,8 @@ export interface BotOptions {
   appId: string;
   appSecret: string;
   onMessage: (msg: IncomingMessage, bot: Bot) => Promise<void>;
-  onDocumentComment?: (comment: IncomingDocumentComment, bot: Bot) => Promise<void>;
   onCardAction?: (action: CardAction) => Promise<CardActionResponse | undefined>;
+  onDocumentComment?: (comment: IncomingDocumentComment, bot: Bot) => Promise<void>;
 }
 
 export interface BotIdentity {
@@ -203,7 +203,9 @@ export function startBot(opts: BotOptions): Bot {
         path: { message_id: messageId },
         data: {
           msg_type: "text",
-          content: JSON.stringify({ text: fitFeishuText(text, FEISHU_TEXT_LIMIT) }),
+          content: JSON.stringify({
+            text: fitFeishuText(text, FEISHU_TEXT_LIMIT),
+          }),
           ...(replyInThread ? { reply_in_thread: true } : {}),
         },
       });

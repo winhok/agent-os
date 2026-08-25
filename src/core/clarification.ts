@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import type { CollaborationOrigin } from "./collaboration.js";
 
 const OptionSchema = z.object({
   id: z.string().regex(/^[a-z0-9_-]{1,32}$/),
@@ -11,23 +12,18 @@ const QuestionSchema = z
     id: z.string().regex(/^[a-z0-9_-]{1,32}$/),
     prompt: z.string().trim().min(1).max(300),
     options: z.array(OptionSchema).min(2).max(4),
-    recommendedOptionId: z.string().regex(/^[a-z0-9_-]{1,32}$/).optional(),
+    recommendedOptionId: z
+      .string()
+      .regex(/^[a-z0-9_-]{1,32}$/)
+      .optional(),
   })
   .superRefine((question, ctx) => {
     const optionIds = question.options.map((option) => option.id);
     if (new Set(optionIds).size !== optionIds.length) {
-      ctx.addIssue({
-        code: "custom",
-        message: "同一道问题的选项 ID 不能重复",
-        path: ["options"],
-      });
+      ctx.addIssue({ code: "custom", message: "同一道问题的选项 ID 不能重复", path: ["options"] });
     }
     if (question.recommendedOptionId && !optionIds.includes(question.recommendedOptionId)) {
-      ctx.addIssue({
-        code: "custom",
-        message: "推荐项必须指向当前问题中的选项",
-        path: ["recommendedOptionId"],
-      });
+      ctx.addIssue({ code: "custom", message: "推荐项必须指向当前问题中的选项", path: ["recommendedOptionId"] });
     }
   });
 
@@ -40,11 +36,7 @@ export const ClarificationRequestSchema = z
   .superRefine((request, ctx) => {
     const questionIds = request.questions.map((question) => question.id);
     if (new Set(questionIds).size !== questionIds.length) {
-      ctx.addIssue({
-        code: "custom",
-        message: "同一份澄清请求的问题 ID 不能重复",
-        path: ["questions"],
-      });
+      ctx.addIssue({ code: "custom", message: "同一份澄清请求的问题 ID 不能重复", path: ["questions"] });
     }
   });
 
@@ -64,6 +56,7 @@ export interface ClarificationFlow {
   sessionId: string;
   ownerOpenId: string;
   ownerUnionId?: string;
+  collaboration?: CollaborationOrigin;
   originalMessageId: string;
   cardMessageId?: string;
   replyInThread: boolean;
@@ -78,6 +71,7 @@ export interface CreateClarificationFlowOptions {
   sessionId: string;
   ownerOpenId: string;
   ownerUnionId?: string;
+  collaboration?: CollaborationOrigin;
   originalMessageId: string;
   cardMessageId?: string;
   replyInThread: boolean;
@@ -107,12 +101,12 @@ export function isClarificationOwner(
 }
 
 export function formatClarificationAnswers(flow: ClarificationFlow): string {
-  const lines = flow.answers.map((answer, index) => [
-    `${index + 1}. ${answer.prompt}`,
-    answer.source === "agent"
-      ? `Agent 采用推荐方案：${answer.answer}`
-      : `用户回答：${answer.answer}`,
-  ].join("\n"));
+  const lines = flow.answers.map((answer, index) =>
+    [
+      `${index + 1}. ${answer.prompt}`,
+      answer.source === "agent" ? `Agent 采用推荐方案：${answer.answer}` : `用户回答：${answer.answer}`,
+    ].join("\n"),
+  );
   return [
     "用户已经通过飞书卡片回答了上一轮需求澄清问题。",
     ...lines,

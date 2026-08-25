@@ -3,7 +3,9 @@ import type { CliAdapter, CliPromptInput, CliEvent, CliRunStats } from "./types.
 import {
   CLAUDE_CLARIFICATION_TOOL_NAME,
   CLAUDE_PRODUCT_SPEC_TOOL_NAME,
+  CLAUDE_DISPATCH_TASK_TOOL_NAME,
   PRODUCT_SPEC_TOOL_NAME,
+  DISPATCH_TASK_TOOL_NAME,
   claudeAppToolArgs,
 } from "./app-tools.js";
 
@@ -168,11 +170,9 @@ export class ClaudeAdapter implements CliAdapter {
     }
 
     const sessionId = typeof event.session_id === "string" ? event.session_id : undefined;
-
     if (event.type === "system" && event.subtype === "init" && sessionId) {
       return [{ type: "session", sessionId }];
     }
-
     if (event.type === "assistant") {
       const message = isRecord(event.message) ? event.message : {};
       const usedTokens = usageTokens(message.usage);
@@ -205,11 +205,18 @@ export class ClaudeAdapter implements CliAdapter {
             input: block.input,
           });
         }
+        if (block.name === CLAUDE_DISPATCH_TASK_TOOL_NAME) {
+          events.push({
+            type: "tool_call",
+            toolUseId: block.id,
+            toolName: DISPATCH_TASK_TOOL_NAME,
+            input: block.input,
+          });
+        }
         return events;
       });
       return [...contextEvent, ...toolEvents];
     }
-
     if (event.type === "user") {
       return messageBlocks(event.message).flatMap((block): CliEvent[] => {
         if (block.type !== "tool_result" || typeof block.tool_use_id !== "string") {
@@ -224,9 +231,7 @@ export class ClaudeAdapter implements CliAdapter {
         ];
       });
     }
-
     if (event.type !== "result") return [];
-
     if (event.is_error) {
       return [
         {
@@ -236,11 +241,8 @@ export class ClaudeAdapter implements CliAdapter {
         },
       ];
     }
-
     if (typeof event.result !== "string") return [];
-
     const stats = parseStats(event);
-
     return [
       {
         type: "result",

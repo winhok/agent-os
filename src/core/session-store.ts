@@ -60,6 +60,7 @@ export class JsonSessionStore implements SessionStore {
     private readonly legacyBotId = "default",
     private readonly defaultWorkspaces: Readonly<Record<string, string>> = {},
   ) {}
+
   async load(): Promise<Session[]> {
     let content: string;
     try {

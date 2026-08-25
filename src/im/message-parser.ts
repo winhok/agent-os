@@ -26,21 +26,13 @@ export function extractResourceKeys(
   content: string,
 ): { type: "image" | "file"; key: string; fileName?: string }[] {
   const parsed = JSON.parse(content);
-  const resources: {
-    type: "image" | "file";
-    key: string;
-    fileName?: string;
-  }[] = [];
+  const resources: { type: "image" | "file"; key: string; fileName?: string }[] = [];
 
   if (messageType === "image" && parsed.image_key) {
     resources.push({ type: "image", key: parsed.image_key });
   }
   if (messageType === "file" && parsed.file_key) {
-    resources.push({
-      type: "file",
-      key: parsed.file_key,
-      fileName: parsed.file_name,
-    });
+    resources.push({ type: "file", key: parsed.file_key, fileName: parsed.file_name });
   }
   if (messageType === "post") {
     const paragraphs: any[][] = parsed.content ?? [];

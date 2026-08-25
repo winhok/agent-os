@@ -9,7 +9,7 @@ rl.on("line", (line) => {
   let ev: any;
   try {
     ev = JSON.parse(line);
-  } catch (e) {
+  } catch {
     return;
   }
 

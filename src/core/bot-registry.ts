@@ -16,7 +16,6 @@ export interface BotConfig {
   skills: string[];
   systemPrompt: string;
   workspaceDir: string;
-  reviewBy?: string;
   collaborationMaxRounds: number;
 }
 
@@ -40,10 +39,6 @@ const BotSchema = z.object({
     .default([]),
   workspace: z.string().trim().min(1).optional(),
   systemPrompt: z.string().trim().optional().default(""),
-  reviewBy: z
-    .string()
-    .regex(/^[a-z0-9][a-z0-9_-]{0,31}$/)
-    .optional(),
   collaborationMaxRounds: z.number().int().min(1).max(32).optional().default(16),
   enabled: z.boolean().optional().default(true),
 });
@@ -81,7 +76,6 @@ export function parseAgentOsConfig(input: unknown, env: Environment, baseDirecto
         role: bot.role,
         skills: [...new Set(bot.skills)],
         systemPrompt: bot.systemPrompt,
-        reviewBy: bot.reviewBy,
         collaborationMaxRounds: bot.collaborationMaxRounds,
         workspaceDir: resolveWorkspacePath(
           bot.workspace ?? env.CLI_WORKDIR ?? env.CLAUDE_WORKDIR ?? ".",
@@ -93,14 +87,6 @@ export function parseAgentOsConfig(input: unknown, env: Environment, baseDirecto
   const enabledIds = new Set(configs.map((config) => config.id));
   if (!enabledIds.has(parsed.teamLeader)) {
     throw new Error(`teamLeader 指向未启用的 bot: ${parsed.teamLeader}`);
-  }
-  for (const config of configs) {
-    if (config.reviewBy && !enabledIds.has(config.reviewBy)) {
-      throw new Error(`bot ${config.id} 的 reviewBy 指向未启用的 bot: ${config.reviewBy}`);
-    }
-    if (config.reviewBy === config.id) {
-      throw new Error(`bot ${config.id} 不能把自己配置为 reviewBy`);
-    }
   }
   return {
     teamLeaderId: parsed.teamLeader,
@@ -167,7 +153,6 @@ export function buildBotPrompt(
     "- 详细产物写入当前工作区文件。回复只提供简短摘要和文件路径。",
     "- 需要用户决策时，必须调用 request_clarification 工具；不要用大段文字列出问题。工具调用后停止继续推断，等待用户回答。",
   ].join("\n");
-
   const sections = [
     `你的角色：${config.role}`,
     config.systemPrompt.trim(),

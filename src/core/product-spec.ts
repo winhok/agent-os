@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import type { CollaborationOrigin } from "./collaboration.js";
 
 const WorkspaceDocumentPathSchema = z
   .string()
@@ -43,6 +44,7 @@ export interface ProductSpecFlow {
   sessionId: string;
   ownerOpenId: string;
   ownerUnionId?: string;
+  collaboration?: CollaborationOrigin;
   request: ProductSpecRequest;
   status: "pending" | "approved" | "expired";
   approvedAt?: string;
@@ -54,6 +56,7 @@ export interface CreateProductSpecFlowOptions {
   sessionId: string;
   ownerOpenId: string;
   ownerUnionId?: string;
+  collaboration?: CollaborationOrigin;
   request: ProductSpecRequest;
 }
 

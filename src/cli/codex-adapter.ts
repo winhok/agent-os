@@ -1,5 +1,10 @@
 import type { CliAdapter, CliPromptInput, CliEvent, CliRunStats } from "./types.js";
-import { CLARIFICATION_TOOL_NAME, PRODUCT_SPEC_TOOL_NAME, codexAppToolArgs } from "./app-tools.js";
+import {
+  CLARIFICATION_TOOL_NAME,
+  PRODUCT_SPEC_TOOL_NAME,
+  DISPATCH_TASK_TOOL_NAME,
+  codexAppToolArgs,
+} from "./app-tools.js";
 
 interface CodexEvent {
   type?: unknown;
@@ -41,37 +46,21 @@ function toolInfo(item: Record<string, unknown>):
   | undefined {
   if (item.type === "command_execution") {
     const detail = shortText(item.command);
-    return {
-      toolName: "Bash",
-      label: "运行命令",
-      ...(detail ? { detail } : {}),
-    };
+    return { toolName: "Bash", label: "运行命令", ...(detail ? { detail } : {}) };
   }
   if (item.type === "file_change") {
     const detail = firstChangedPath(item);
-    return {
-      toolName: "Edit",
-      label: "修改文件",
-      ...(detail ? { detail } : {}),
-    };
+    return { toolName: "Edit", label: "修改文件", ...(detail ? { detail } : {}) };
   }
   if (item.type === "web_search") {
     const detail = shortText(item.query);
-    return {
-      toolName: "WebSearch",
-      label: "搜索资料",
-      ...(detail ? { detail } : {}),
-    };
+    return { toolName: "WebSearch", label: "搜索资料", ...(detail ? { detail } : {}) };
   }
   if (item.type === "mcp_tool_call") {
     const server = typeof item.server === "string" ? item.server : "";
     const tool = typeof item.tool === "string" ? item.tool : "";
     const detail = shortText([server, tool].filter(Boolean).join("."));
-    return {
-      toolName: "MCP",
-      label: "调用外部工具",
-      ...(detail ? { detail } : {}),
-    };
+    return { toolName: "MCP", label: "调用外部工具", ...(detail ? { detail } : {}) };
   }
   return undefined;
 }
@@ -174,7 +163,9 @@ export class CodexAdapter implements CliAdapter {
       if (
         item.type === "mcp_tool_call" &&
         item.server === "agent_os" &&
-        (item.tool === CLARIFICATION_TOOL_NAME || item.tool === PRODUCT_SPEC_TOOL_NAME)
+        (item.tool === CLARIFICATION_TOOL_NAME ||
+          item.tool === PRODUCT_SPEC_TOOL_NAME ||
+          item.tool === DISPATCH_TASK_TOOL_NAME)
       ) {
         events.push({
           type: "tool_call",

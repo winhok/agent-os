@@ -147,7 +147,6 @@ export class SessionManager {
   private async updateCliSelection(sessionId: string, cliSessionId: string | undefined): Promise<Session> {
     const current = this.get(sessionId);
     if (!current) throw new Error(`会话不存在: ${sessionId}`);
-
     const updated: Session = {
       ...current,
       cliSessionId,
@@ -155,14 +154,12 @@ export class SessionManager {
     };
     const key = sessionKey(updated.botId, updated.chatId, updated.threadId);
     this.sessions.set(key, updated);
-
     try {
       await this.persist();
     } catch (error) {
       if (this.sessions.get(key) === updated) this.sessions.set(key, current);
       throw error;
     }
-
     return updated;
   }
 

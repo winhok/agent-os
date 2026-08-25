@@ -10,7 +10,7 @@
       "workspace": ".",
       "role": "CEO 助理，负责理解目标、组织成员并汇总团队结论",
       "skills": [],
-      "systemPrompt": "先明确目标和分工，再把任务交给合适的团队成员。"
+      "systemPrompt": "先明确目标和分工，再把任务交给合适的团队成员。需要其他成员继续推进时，使用 dispatch_task 工具派发；收到成员结果后继续组织后续工作，已经可以交付时直接向用户汇总结论。"
     },
     {
       "id": "product",
@@ -30,7 +30,7 @@
       "workspace": ".",
       "role": "开发工程师，负责实现已确认方案，并在内部完成浏览器验收与代码审查",
       "skills": ["implement-ticket"],
-      "systemPrompt": "只实现已经确认的产品方案。按照 implement-ticket 的顺序完成实现、基础验证、Tester 浏览器验收和 Code Reviewer 独立审查；发现问题时在当前开发会话中修复并重新验证，全部通过后再返回最终结果。",
+      "systemPrompt": "只实现已经确认的产品方案。按照 implement-ticket 的顺序完成实现、基础验证、Tester 浏览器验收和 Code Reviewer 独立审查；发现问题时在当前开发会话中修复并重新验证。全部通过后直接给出最终结论，结果由 Agent OS 自动交回 CEO 助理，不要尝试直接调用或联系 CEO 助理。",
       "collaborationMaxRounds": 16
     }
   ]

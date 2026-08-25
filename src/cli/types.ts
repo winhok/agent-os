@@ -32,6 +32,12 @@ export interface CliRunStats {
   contextWindowTokens?: number;
 }
 
+export interface CliSessionSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
 export type CliEvent =
   | { type: "session"; sessionId: string }
   | {
@@ -71,10 +77,4 @@ export interface CliRunResult {
     toolName: string;
     input: unknown;
   }>;
-}
-
-export interface CliSessionSummary {
-  id: string;
-  title: string;
-  updatedAt: string;
 }

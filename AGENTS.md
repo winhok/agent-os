@@ -17,18 +17,20 @@
 - Node.js 22+、pnpm，项目仅使用 ESM。
 - 从 `.env.example` 创建本地 `.env`，从 `config/bots.example.json` 创建 `config/bots.json`；两者都不得提交。
 - bot 凭证由配置中的 `appIdEnv` / `appSecretEnv` 间接引用，禁止在源码或示例配置中写真实凭证。
+- `teamLeader` 必须指向已启用的 bot；只有该 bot 可以调用 `dispatch_task`。`defaultProductDeliveryMode` 只支持 `local` 与 `lark-doc`。
 - `CLI_WORKDIR` 决定 AI 编程 CLI 的默认工作目录；bot 的 `workspace` 可以覆盖它。
+- `collaborationMaxRounds` 控制协作链最大轮数，取值为 1–32，默认 16；不要重新引入静态 `reviewBy` 路由。
 - bot 声明的 Skill 优先从工作区 `.agents/skills/`、`.claude/skills/` 加载，缺失时才回退到用户级或全局同名 Skill。
 - 下载文件放在 `data/downloads/`，运行状态放在 `data/`，日志放在 `logs/`；这些运行产物不提交 Git。
 
 ## 模块地图
 
 - `src/index.ts`：应用入口，装配飞书连接、会话、产品工作流、任务执行与结果回传
-- `src/app/`：消息和卡片用例编排，包括命令、澄清、产品方案提交、文档评论续接与通知
-- `src/core/`：bot/team 注册、话题任务、会话持久化、协作状态、产品方案状态与工作区解析
+- `src/app/`：消息和卡片用例编排，包括命令、澄清、产品方案提交、文档评论续接、团队协作与通知
+- `src/core/`：bot/team 注册、话题任务、会话持久化、协作协议、产品方案状态与工作区解析
 - `src/cli/`：Claude Code / Codex 适配器、原生会话、子进程生命周期、事件归一化与取消
 - `src/im/`：飞书 WS/REST 接入、消息解析和交互卡片渲染
-- `src/mcp/`：Agent OS 应用工具服务
+- `src/mcp/`：Agent OS 结构化工具服务，当前提供 `request_clarification`、`request_spec_approval` 与 `dispatch_task`
 - `src/probe-cli.ts`、`src/probe-app-tool.ts`：CLI 与 MCP 的独立调试入口
 - `config/bots.example.json`：可公开提交的 bot 拓扑示例；本地真实配置使用 `config/bots.json`
 
@@ -36,8 +38,11 @@
 
 - 先沿真实运行调用链检查改动，不要只凭类型检查推断飞书、浏览器或外部 CLI 行为。
 - 保持 CLI 无关的核心状态与协议在 `src/core/` / `src/app/`，Claude 与 Codex 差异留在各自适配器内。
-- 更改结构化工具或卡片协议时，同时检查提交解析、状态持久化、续接逻辑和用户可见反馈。
+- 更改结构化工具或卡片协议时，同时检查 MCP 注册、Claude/Codex 事件归一化、提交解析、状态持久化、续接逻辑和用户可见反馈。
 - 更改 bot 配置字段时，同步检查 Zod schema、示例配置、团队展示和启动时校验。
+- 会话以 bot、话题和工作目录为边界；切换工作目录时必须清除旧 CLI 会话绑定，恢复会话前必须校验 CLI 类型、原生会话 ID 与当前工作目录。
+- 协作任务必须由 `dispatch_task` 进入确定性派发链：目标只能是已注册且非自身的 bot，工作目录与原始用户身份随任务传递，澄清/方案确认后仍需回到原协作链，并受轮次上限和重复消费保护。
+- JSON 状态继续使用临时文件加原子重命名写入；进程重启后把中断的 `creating` / `active` 会话恢复为 `idle`，不要把内存中的运行态当作可持久化事实。
 - 提交前至少运行 `pnpm build` 与 `git diff --check`，并确认没有暂存 `.env`、`config/bots.json`、`data/` 或 `logs/`。
 
 ## 错题本

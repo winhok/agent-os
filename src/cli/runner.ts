@@ -3,7 +3,14 @@ import { promptInputForPlatform } from "./types.js";
 import { createInterface } from "node:readline";
 import type { CliAdapter, CliEvent, CliRunResult } from "./types.js";
 
-const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+
+function envTimeoutMs(adapter: CliAdapter): number | undefined {
+  const raw = process.env[`${adapter.id.toUpperCase()}_TIMEOUT_MS`] ?? process.env.CLI_TIMEOUT_MS;
+  if (!raw) return undefined;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
 
 export interface RunCliOptions {
   adapter: CliAdapter;
@@ -16,7 +23,15 @@ export interface RunCliOptions {
 }
 
 export function runCli(options: RunCliOptions): Promise<CliRunResult> {
-  const { adapter, prompt, cwd, sessionId, signal, timeoutMs = DEFAULT_TIMEOUT_MS, onEvent } = options;
+  const {
+    adapter,
+    prompt,
+    cwd,
+    sessionId,
+    signal,
+    timeoutMs = envTimeoutMs(adapter) ?? DEFAULT_TIMEOUT_MS,
+    onEvent,
+  } = options;
   const promptInput = promptInputForPlatform(process.platform);
   const useStdin = promptInput === "stdin";
   const args = sessionId
@@ -61,14 +76,13 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
     lines.on("line", (line) => {
       for (const event of adapter.parseEvents(line)) {
         onEvent?.(event);
-
-        if ("sessionId" in event && event.sessionId) observedSessionId = event.sessionId;
-
+        if ("sessionId" in event && event.sessionId) {
+          observedSessionId = event.sessionId;
+        }
         if (event.type === "error") {
           resultError = new Error(event.message);
           continue;
         }
-
         if (event.type === "tool_call") {
           observedToolCalls.set(event.toolUseId, event);
           continue;
@@ -77,7 +91,6 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
           observedToolCalls.delete(event.toolUseId);
           continue;
         }
-
         if (event.type === "result") {
           if (event.answer) observedAnswer = event.answer;
           if (event.stats) observedStats = event.stats;
@@ -105,7 +118,6 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
       }
       fail(error);
     });
-
     child.once("close", (code) => {
       if (settled) return;
       if (timedOut) {
@@ -128,7 +140,6 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
           input: call.input,
         }));
       }
-
       settled = true;
       finish();
       resolve(finalResult);

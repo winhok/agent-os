@@ -1,9 +1,4 @@
-import {
-  spawn,
-  type ChildProcess,
-  type ChildProcessByStdio,
-  type SpawnOptions,
-} from "node:child_process";
+import { spawn, type ChildProcess, type ChildProcessByStdio, type SpawnOptions } from "node:child_process";
 import type { Readable, Writable } from "node:stream";
 
 export function killCli(child: ChildProcess, signal: NodeJS.Signals = "SIGTERM"): void {
