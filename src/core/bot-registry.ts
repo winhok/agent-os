@@ -151,8 +151,10 @@ export function buildBotPrompt(
     "- 最终回复控制在 1200 个中文字符以内，先给结论，再给必要依据和下一步。",
     "- 不在回复中粘贴完整代码、长日志或整份产品文档，也不要输出 Markdown 表格。",
     "- 详细产物写入当前工作区文件。回复只提供简短摘要和文件路径。",
-    "- 需要用户决策时，必须调用 request_clarification 工具；不要用大段文字列出问题。工具调用后停止继续推断，等待用户回答。",
   ].join("\n");
+  const clarificationPolicy = config.skills.includes("grill-me")
+    ? "需要用户决策时，必须调用 request_clarification 工具；不要用大段文字列出问题。工具调用后停止继续推断，等待用户回答。"
+    : "";
   const sections = [
     `你的角色：${config.role}`,
     config.systemPrompt.trim(),
@@ -168,6 +170,7 @@ export function buildBotPrompt(
         ].join("\n")
       : "",
     feishuOutputPolicy,
+    clarificationPolicy,
     `当前任务：${prompt}`,
   ];
   return sections.filter(Boolean).join("\n\n");
