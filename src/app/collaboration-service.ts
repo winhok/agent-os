@@ -9,7 +9,9 @@ import type { AppRuntime } from "./runtime.js";
 export interface CollaborationDispatch {
   senderConfig: BotConfig;
   senderBot: Bot;
-  replyToMessageId: string;
+  replyToMessageId?: string;
+  chatId?: string;
+  skipCard?: boolean;
   targetBotId: string;
   taskId: string;
   ownerOpenId: string;
@@ -50,9 +52,25 @@ export class CollaborationService {
     this.runtime.collaborationInbox.register(collaboration);
 
     try {
-      const cardMessageId = await options.senderBot.replyCard(
-        options.replyToMessageId,
-        buildCollaborationCard({
+      if (options.chatId && options.skipCard) {
+        const mentionText = [
+          `新的协作任务：${options.objective}`,
+          options.instruction,
+          options.expectedOutput ? `期望产出：${options.expectedOutput}` : "",
+          `任务编号：${collaboration.dispatchId}`,
+        ]
+          .filter(Boolean)
+          .join("\n");
+        const mentionMessageId = await options.senderBot.sendMentionToChat(
+          options.chatId,
+          target.identity,
+          mentionText,
+        );
+        if (!mentionMessageId) {
+          throw new Error("飞书没有返回协作通知 message_id");
+        }
+      } else {
+        const collaborationCard = buildCollaborationCard({
           senderName: this.runtime.botRuntimes.get(options.senderConfig.id)?.identity.name ?? options.senderConfig.id,
           targetName: target.identity.name,
           reportToName: reportTo.identity.name,
@@ -62,22 +80,23 @@ export class CollaborationService {
           expectedOutput: options.expectedOutput,
           round: options.round,
           maxRounds: options.maxRounds,
-        }),
-        true,
-      );
-      if (!cardMessageId) {
-        throw new Error("飞书没有返回协作卡片 message_id");
-      }
-      const mentionMessageId = await options.senderBot.replyMention(
-        cardMessageId,
-        target.identity,
-        options.round === 1
+        });
+        const cardMessageId = options.chatId
+          ? await options.senderBot.sendCardToChat(options.chatId, collaborationCard)
+          : await options.senderBot.replyCard(options.replyToMessageId!, collaborationCard, true);
+        if (!cardMessageId) {
+          throw new Error("飞书没有返回协作卡片 message_id");
+        }
+        const mentionText =
+          options.round === 1
           ? `新的协作任务：${options.objective}（任务编号：${collaboration.dispatchId}），请查看上方卡片。`
-          : `协作结果已经返回（任务编号：${collaboration.dispatchId}），请查看上方卡片。`,
-        true,
-      );
-      if (!mentionMessageId) {
-        throw new Error("飞书没有返回协作通知 message_id");
+          : `协作结果已经返回（任务编号：${collaboration.dispatchId}），请查看上方卡片。`;
+        const mentionMessageId = options.chatId
+          ? await options.senderBot.sendMentionToChat(options.chatId, target.identity, mentionText)
+          : await options.senderBot.replyMention(cardMessageId, target.identity, mentionText, true);
+        if (!mentionMessageId) {
+          throw new Error("飞书没有返回协作通知 message_id");
+        }
       }
     } catch (error) {
       this.runtime.collaborationInbox.consume(collaboration.dispatchId, collaboration.toBotId);

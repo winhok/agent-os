@@ -2,6 +2,9 @@ import type { CliRunStats, CliSessionSummary } from "../cli/types.js";
 import type { ClarificationFlow } from "../core/clarification.js";
 import type { ProductSpecFlow } from "../core/product-spec.js";
 import type { TaskActivity, TaskProgressSnapshot } from "../core/task-progress.js";
+import type { ScheduledTask } from "../core/schedule.js";
+import { scheduleDescription, scheduleKindLabel } from "../core/schedule.js";
+import type { ScheduledRun } from "../core/schedule-run-store.js";
 
 export type CardJson = Record<string, unknown>;
 export type TaskStatus = "running" | "success" | "failed" | "cancelled";
@@ -753,6 +756,105 @@ export function buildCollaborationCard(options: CollaborationCardOptions): CardJ
           : []),
         { tag: "hr" },
         { tag: "markdown", content: `_${footer}_` },
+      ],
+    },
+  };
+}
+
+export function buildScheduleCreatedCard(task: ScheduledTask): CardJson {
+  return {
+    schema: "2.0",
+    config: {
+      update_multi: true,
+      summary: { content: `定时任务已创建：${task.id}` },
+    },
+    header: {
+      template: "green",
+      title: { tag: "plain_text", content: "定时任务已创建" },
+      subtitle: {
+        tag: "plain_text",
+        content: `目标成员：${task.targetBotId}`,
+      },
+    },
+    body: {
+      direction: "vertical",
+      vertical_spacing: "12px",
+      elements: [
+        {
+          tag: "markdown",
+          content: [
+            `**任务编号** \`${task.id}\``,
+            `**执行内容**\n${escapeFeishuMarkdown(task.prompt)}`,
+            `**调度规则** ${scheduleKindLabel(task.rule)} · ${escapeFeishuMarkdown(scheduleDescription(task.rule))}`,
+            task.nextRunAt ? `**下一次执行** ${escapeFeishuMarkdown(task.nextRunAt)}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        },
+      ],
+    },
+  };
+}
+
+export function buildScheduleListCard(tasks: ScheduledTask[]): CardJson {
+  const content = tasks.length
+    ? tasks
+        .map((task) =>
+          [
+            `**${task.id}** · ${task.status}`,
+            escapeFeishuMarkdown(task.prompt.slice(0, 80)),
+            `${scheduleKindLabel(task.rule)} · ${escapeFeishuMarkdown(scheduleDescription(task.rule))} · 交给 ${task.targetBotId}`,
+          ].join("\n"),
+        )
+        .join("\n\n")
+    : "当前还没有定时任务。";
+  return {
+    schema: "2.0",
+    config: { summary: { content: `定时任务列表：${tasks.length} 条` } },
+    header: {
+      template: "blue",
+      title: { tag: "plain_text", content: "定时任务列表" },
+      subtitle: {
+        tag: "plain_text",
+        content: `${tasks.length} 条计划`,
+      },
+    },
+    body: {
+      direction: "vertical",
+      vertical_spacing: "12px",
+      elements: [{ tag: "markdown", content }],
+    },
+  };
+}
+
+export function buildScheduleRunCard(run: ScheduledRun): CardJson {
+  return {
+    schema: "2.0",
+    config: { summary: { content: `定时任务运行：${run.status}` } },
+    header: {
+      template: run.status === "succeeded" ? "green" : run.status === "failed" ? "red" : "grey",
+      title: { tag: "plain_text", content: `定时任务运行 · ${run.status}` },
+      subtitle: {
+        tag: "plain_text",
+        content: `计划 ${run.scheduleId}`,
+      },
+    },
+    body: {
+      direction: "vertical",
+      vertical_spacing: "12px",
+      elements: [
+        {
+          tag: "markdown",
+          content: [
+            `**计划触发时间** ${escapeFeishuMarkdown(run.scheduledFor)}`,
+            `**开始时间** ${escapeFeishuMarkdown(run.startedAt)}`,
+            run.completedAt ? `**结束时间** ${escapeFeishuMarkdown(run.completedAt)}` : "",
+            run.taskId ? `**协作任务** \`${run.taskId}\`` : "",
+            run.error ? `**错误**\n${escapeFeishuMarkdown(run.error)}` : "",
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        },
       ],
     },
   };

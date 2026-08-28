@@ -19,6 +19,7 @@ export interface RunCliOptions {
   sessionId?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
+  env?: Record<string, string>;
   onEvent?: (event: CliEvent) => void;
 }
 
@@ -30,6 +31,7 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
     sessionId,
     signal,
     timeoutMs = envTimeoutMs(adapter) ?? DEFAULT_TIMEOUT_MS,
+    env,
     onEvent,
   } = options;
   const promptInput = promptInputForPlatform(process.platform);
@@ -42,6 +44,7 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
     const child = spawnCli(adapter.command, args, {
       cwd,
       signal,
+      env: env ? { ...process.env, ...env } : undefined,
       stdio: ["pipe", "pipe", "pipe"],
     });
     if (child.stdin) {

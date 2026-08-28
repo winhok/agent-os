@@ -3,6 +3,7 @@ import {
   CLARIFICATION_TOOL_NAME,
   PRODUCT_SPEC_TOOL_NAME,
   DISPATCH_TASK_TOOL_NAME,
+  SCHEDULE_MANAGE_TOOL_NAME,
   codexAppToolArgs,
 } from "./app-tools.js";
 
@@ -165,7 +166,8 @@ export class CodexAdapter implements CliAdapter {
         item.server === "agent_os" &&
         (item.tool === CLARIFICATION_TOOL_NAME ||
           item.tool === PRODUCT_SPEC_TOOL_NAME ||
-          item.tool === DISPATCH_TASK_TOOL_NAME)
+          item.tool === DISPATCH_TASK_TOOL_NAME ||
+          item.tool === SCHEDULE_MANAGE_TOOL_NAME)
       ) {
         events.push({
           type: "tool_call",

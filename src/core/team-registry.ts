@@ -49,6 +49,7 @@ export class TeamRegistry {
       `你当前以 ${current.id} 的身份工作。只处理交给你的职责；需要其他成员参与时，清楚说明希望交给谁以及期望结果。`,
       "团队名单中的成员都是真实的飞书 bot。CLI 内部子 Agent 适合处理临时分工，不能冒充这些长期团队成员。",
       "需要把任务交给其他成员时，使用 dispatch_task 工具，由 Agent OS 发送协作卡片并真正 @ 对方。只有 CEO 助理可以在运行时调用该工具；targetBotId 必须来自上面的团队名单，不能填写自己。",
+      "用户需要定时执行任务时，使用 schedule_manage 工具（action=add）把需求转换成 targetBotId、prompt 和 rule；到点后 Agent OS 会自动派发。",
     ].join("\n");
   }
 

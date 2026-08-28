@@ -91,6 +91,8 @@ export interface Bot {
     text: string,
     replyInThread?: boolean,
   ) => Promise<string | undefined>;
+  sendCardToChat: (chatId: string, card: CardJson) => Promise<string | undefined>;
+  sendMentionToChat: (chatId: string, target: BotIdentity, text: string) => Promise<string | undefined>;
   updateCard: (messageId: string, card: CardJson) => Promise<void>;
   subscribeToDocumentComments: () => Promise<void>;
   replyToDocumentComment: (comment: IncomingDocumentComment, text: string) => Promise<void>;
@@ -231,6 +233,30 @@ export function startBot(opts: BotOptions): Bot {
           msg_type: "post",
           content: JSON.stringify(buildMentionPostContent(target, text)),
           ...(replyInThread ? { reply_in_thread: true } : {}),
+        },
+      });
+      return res.data?.message_id;
+    },
+
+    async sendCardToChat(chatId, card) {
+      const res = await client.im.v1.message.create({
+        params: { receive_id_type: "chat_id" },
+        data: {
+          receive_id: chatId,
+          msg_type: "interactive",
+          content: JSON.stringify(card),
+        },
+      });
+      return res.data?.message_id;
+    },
+
+    async sendMentionToChat(chatId, target, text) {
+      const res = await client.im.v1.message.create({
+        params: { receive_id_type: "chat_id" },
+        data: {
+          receive_id: chatId,
+          msg_type: "post",
+          content: JSON.stringify(buildMentionPostContent(target, text)),
         },
       });
       return res.data?.message_id;
