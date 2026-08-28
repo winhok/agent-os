@@ -67,7 +67,7 @@ export function buildCollaborationPrompt(message: CollaborationMessage): string 
 }
 
 export function collaborationTurnKey(message: CollaborationMessage): string {
-  return `${message.taskId}:${message.round}:${message.toBotId}`;
+  return message.dispatchId;
 }
 
 export class CollaborationInbox {

@@ -115,7 +115,7 @@ async function startConfiguredBot(config: BotConfig, collaborationService: Colla
         const mentionedCurrentBot = currentRuntime
           ? msg.mentions.some((mention) => mention.openId === currentRuntime.identity.openId)
           : false;
-        const dispatchId = msg.text.match(/任务编号：([a-f0-9]{12})/)?.[1];
+        const dispatchId = msg.text.match(/任务编号：([a-f0-9]{32})/)?.[1];
         const pending =
           msg.messageType === "post" && mentionedCurrentBot && dispatchId
             ? collaborationInbox.consume(dispatchId, config.id)
@@ -131,7 +131,9 @@ async function startConfiguredBot(config: BotConfig, collaborationService: Colla
         }
         const turnKey = collaborationTurnKey(pending);
         if (processedCollaborationTurns.has(turnKey)) {
-          console.log(`[协作] 忽略重复消息 ${turnKey}`);
+          console.log(
+            `[协作] 忽略重复消息 dispatch=${pending.dispatchId} task=${pending.taskId} round=${pending.round}/${pending.maxRounds} target=${pending.toBotId}`,
+          );
           return;
         }
         processedCollaborationTurns.add(turnKey);

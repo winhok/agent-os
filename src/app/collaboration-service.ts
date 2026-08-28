@@ -33,7 +33,7 @@ export class CollaborationService {
     if (!reportTo) throw new Error(`结果接收 bot 尚未就绪: ${options.reportToBotId}`);
 
     const collaboration: CollaborationMessage = {
-      dispatchId: randomUUID().replaceAll("-", "").slice(0, 12),
+      dispatchId: randomUUID().replaceAll("-", ""),
       taskId: options.taskId,
       ownerOpenId: options.ownerOpenId,
       ownerUnionId: options.ownerUnionId,
