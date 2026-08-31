@@ -89,8 +89,8 @@ export class CollaborationService {
         }
         const mentionText =
           options.round === 1
-          ? `新的协作任务：${options.objective}（任务编号：${collaboration.dispatchId}），请查看上方卡片。`
-          : `协作结果已经返回（任务编号：${collaboration.dispatchId}），请查看上方卡片。`;
+            ? `新的协作任务：${options.objective}（任务编号：${collaboration.dispatchId}），请查看上方卡片。`
+            : `协作结果已经返回（任务编号：${collaboration.dispatchId}），请查看上方卡片。`;
         const mentionMessageId = options.chatId
           ? await options.senderBot.sendMentionToChat(options.chatId, target.identity, mentionText)
           : await options.senderBot.replyMention(cardMessageId, target.identity, mentionText, true);

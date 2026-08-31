@@ -10,7 +10,9 @@
     "start:once": "tsx src/index.ts",
     "build": "tsc",
     "probe:cli": "tsx src/probe-cli.ts",
-    "probe:tool": "tsx src/probe-app-tool.ts"
+    "probe:tool": "tsx src/probe-app-tool.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "engines": {
     "node": ">=22"
@@ -22,13 +24,15 @@
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.73.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "cac": "^7.0.0",
     "croner": "^10.0.1",
     "dotenv": "^17.4.2",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/node": "^26.4.0",
-    "tsx": "^4.23.12",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   }
 }

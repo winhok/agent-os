@@ -19,6 +19,7 @@ export interface RunCliOptions {
   sessionId?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
+  stopToolNames?: string[];
   env?: Record<string, string>;
   onEvent?: (event: CliEvent) => void;
 }
@@ -31,9 +32,11 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
     sessionId,
     signal,
     timeoutMs = envTimeoutMs(adapter) ?? DEFAULT_TIMEOUT_MS,
+    stopToolNames = [],
     env,
     onEvent,
   } = options;
+  // Windows 下 prompt 走 stdin（规避 cmd 转义/乱码），其他平台直接作为命令行参数。
   const promptInput = promptInputForPlatform(process.platform);
   const useStdin = promptInput === "stdin";
   const args = sessionId
@@ -41,16 +44,20 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
     : adapter.buildArgs(prompt, promptInput);
 
   return new Promise((resolve, reject) => {
+    // 固定用 `['pipe','pipe','pipe']`，让 stdin 始终可写（spawnCli 返回类型按字面量收窄）。
     const child = spawnCli(adapter.command, args, {
       cwd,
       signal,
       env: env ? { ...process.env, ...env } : undefined,
       stdio: ["pipe", "pipe", "pipe"],
     });
+    // stdin 模式下把 prompt 写入子进程；否则 prompt 已在命令行参数里，stdin 直接收口。
     if (child.stdin) {
       if (useStdin) child.stdin.end(prompt, "utf8");
       else child.stdin.end();
     }
+    // spawn 的 signal 选项只杀直接子进程（cmd 外壳），Windows 下 claude.exe/codex.exe 会变孤儿；
+    // 额外监听 abort 用 killCli 连进程树一起清。
     signal?.addEventListener("abort", () => killCli(child), { once: true });
     const lines = createInterface({ input: child.stdout });
     let observedSessionId = sessionId;
@@ -58,6 +65,7 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
     let observedStats: CliRunResult["stats"];
     const observedToolCalls = new Map<string, NonNullable<CliRunResult["toolCalls"]>[number]>();
     let finalResult: CliRunResult | undefined;
+    let stoppedByToolCall: NonNullable<CliRunResult["toolCalls"]>[number] | undefined;
     let resultError: Error | undefined;
     let stderr = "";
     let settled = false;
@@ -88,6 +96,14 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
         }
         if (event.type === "tool_call") {
           observedToolCalls.set(event.toolUseId, event);
+          if (!stoppedByToolCall && stopToolNames.includes(event.toolName)) {
+            stoppedByToolCall = {
+              toolUseId: event.toolUseId,
+              toolName: event.toolName,
+              input: event.input,
+            };
+            killCli(child);
+          }
           continue;
         }
         if (event.type === "tool_end" && event.failed) {
@@ -123,6 +139,16 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
     });
     child.once("close", (code) => {
       if (settled) return;
+      if (stoppedByToolCall) {
+        settled = true;
+        finish();
+        resolve({
+          answer: observedAnswer ?? "",
+          sessionId: observedSessionId,
+          toolCalls: [stoppedByToolCall],
+        });
+        return;
+      }
       if (timedOut) {
         return fail(new Error(`${adapter.displayName} 执行超时`));
       }

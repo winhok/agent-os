@@ -38,6 +38,7 @@ export async function runProductDocumentComment(options: {
       session.workspaceDir,
       session.cliSessionId,
       run.signal,
+      [],
       () => undefined,
     );
     if (result.sessionId) {

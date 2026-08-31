@@ -5,10 +5,12 @@ import { ClarificationRequestSchema } from "../core/clarification.js";
 import { ProductSpecRequestSchema } from "../core/product-spec.js";
 import { DispatchTaskRequestSchema } from "../core/collaboration.js";
 import { ScheduleManageRequestSchema } from "../core/schedule.js";
+import { ApprovalRequestSchema } from "../core/approval.js";
 import {
   CLARIFICATION_TOOL_NAME,
   PRODUCT_SPEC_TOOL_NAME,
   DISPATCH_TASK_TOOL_NAME,
+  REQUEST_APPROVAL_TOOL_NAME,
   SCHEDULE_MANAGE_TOOL_NAME,
 } from "../cli/app-tools.js";
 
@@ -58,8 +60,7 @@ async function callScheduleManage(input: unknown): Promise<{
     };
   }
   const payload = (await response.json().catch(() => undefined)) as
-    | { notice?: string; error?: string; issues?: unknown }
-    | undefined;
+    { notice?: string; error?: string; issues?: unknown } | undefined;
   if (!response.ok) {
     const detail = payload?.issues ? `\n${JSON.stringify(payload.issues, null, 2)}` : "";
     return {
@@ -164,6 +165,27 @@ server.registerTool(
     inputSchema: ScheduleManageRequestSchema,
   },
   async (input) => callScheduleManage(input),
+);
+
+server.registerTool(
+  REQUEST_APPROVAL_TOOL_NAME,
+  {
+    title: "请求高危操作审批",
+    description: [
+      "执行可能影响服务可用性或数据安全的操作前调用，例如重启服务、删除文件、修改生产配置、执行数据库写操作。",
+      "提交操作名称、具体详情、影响范围和回滚方式；Agent OS 会展示审批卡，等待用户拍板。",
+      "调用后停止工作，等待审批结果；审批通过后才能继续执行。",
+    ].join(""),
+    inputSchema: ApprovalRequestSchema,
+  },
+  async () => ({
+    content: [
+      {
+        type: "text",
+        text: "审批请求已交给 Agent OS，等待用户拍板。",
+      },
+    ],
+  }),
 );
 
 await server.connect(new StdioServerTransport());

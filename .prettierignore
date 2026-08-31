@@ -1,0 +1,6 @@
+config/bots.json
+data/
+dist/
+logs/
+node_modules/
+pnpm-lock.yaml

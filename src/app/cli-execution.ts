@@ -7,6 +7,7 @@ export function executeCli(
   workspaceDir: string,
   sessionId: string | undefined,
   signal: AbortSignal,
+  stopToolNames: string[],
   onEvent: Parameters<typeof runCli>[0]["onEvent"],
   env?: Record<string, string>,
 ) {
@@ -16,6 +17,7 @@ export function executeCli(
     cwd: workspaceDir,
     sessionId,
     signal,
+    stopToolNames,
     env,
     onEvent,
   });

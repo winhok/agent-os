@@ -1,5 +1,7 @@
-import type { CardAction, CardActionResponse } from "../im/lark.js";
+import type { Bot, CardAction, CardActionResponse } from "../im/lark.js";
 import {
+  buildApprovalContinuingCard,
+  buildApprovalDecidedCard,
   buildClarificationCard,
   buildClarificationContinuingCard,
   buildProductSpecApprovedCard,
@@ -9,12 +11,47 @@ import {
 import type { BotConfig, ProductDeliveryMode } from "../core/bot-registry.js";
 import { isClarificationOwner } from "../core/clarification.js";
 import { isProductSpecOwner } from "../core/product-spec.js";
+import type { ApprovalFlow } from "../core/approval.js";
 import { requestTaskAbort } from "../core/task-abort.js";
 import { getCliAdapter } from "../cli/registry.js";
 import { listNativeCliSessions } from "../cli/native-sessions.js";
 import { continueClarificationFlow } from "./clarification-runner.js";
+import { continueApprovalFlow } from "./approval-runner.js";
 import type { CollaborationService } from "./collaboration-service.js";
 import type { AppRuntime } from "./runtime.js";
+
+export async function scheduleApprovalContinuation(options: {
+  runtime: AppRuntime;
+  config: BotConfig;
+  flow: ApprovalFlow;
+  bot: Bot;
+}): Promise<void> {
+  const { runtime, config, flow, bot } = options;
+  const session = runtime.sessions.get(flow.sessionId);
+  if (!session || session.status === "closed") {
+    throw new Error("对应的 CLI 会话已经失效。");
+  }
+  if (session.status === "active") {
+    throw new Error("当前会话仍在执行，请稍后重试。");
+  }
+  await runtime.sessions.transition(session.id, "active");
+  const run = new AbortController();
+  runtime.activeRuns.set(session.id, {
+    controller: run,
+    ownerOpenId: flow.ownerOpenId,
+  });
+  queueMicrotask(() => {
+    void continueApprovalFlow({
+      runtime,
+      bot,
+      config,
+      flow,
+      run,
+    }).catch((error: Error) => {
+      console.error("[审批] 继续执行失败:", (error as Error).message);
+    });
+  });
+}
 
 export function createCardActionHandler(options: {
   runtime: AppRuntime;
@@ -194,6 +231,78 @@ export function createCardActionHandler(options: {
           card: {
             type: "raw",
             data: buildClarificationContinuingCard(answered.flow),
+          },
+        };
+      } catch (error) {
+        return { toast: { type: "error", content: (error as Error).message } };
+      }
+    }
+
+    if (action.value.action === "decide_approval") {
+      const flowToken = typeof action.value.flowToken === "string" ? action.value.flowToken : "";
+      const decision = action.value.decision === "reject" ? "reject" : "approve";
+      const flow = runtime.approvalFlows.get(flowToken);
+      if (!flow || flow.botId !== config.id || !action.messageId) {
+        return { toast: { type: "error", content: "这份审批请求已经失效。" } };
+      }
+      if (flow.status !== "pending") {
+        return {
+          toast: { type: "info", content: "这份审批已经处理过。" },
+          card: {
+            type: "raw",
+            data: buildApprovalDecidedCard(flow),
+          },
+        };
+      }
+      if (new Date(flow.expiresAt).getTime() < Date.now()) {
+        const expired = runtime.approvalFlows.expire(flowToken);
+        const botRuntime = runtime.botRuntimes.get(config.id);
+        if (expired && botRuntime) {
+          try {
+            await scheduleApprovalContinuation({
+              runtime,
+              config,
+              flow: expired,
+              bot: botRuntime.bot,
+            });
+          } catch (error) {
+            console.error("[审批] 超时收束失败:", (error as Error).message);
+          }
+        }
+        return {
+          toast: { type: "warning", content: "审批已超时，按拒绝处理。" },
+          card: {
+            type: "raw",
+            data: buildApprovalDecidedCard(expired ?? flow),
+          },
+        };
+      }
+      if (!action.operatorOpenId) {
+        return { toast: { type: "warning", content: "无法识别操作者，无法审批。" } };
+      }
+      const resolved = runtime.approvalFlows.resolve(flowToken, decision === "approve" ? "approved" : "rejected");
+      if (!resolved) {
+        return { toast: { type: "warning", content: "审批状态已经更新。" } };
+      }
+      const botRuntime = runtime.botRuntimes.get(config.id);
+      if (!botRuntime) {
+        return { toast: { type: "error", content: "当前 Bot 尚未就绪。" } };
+      }
+      try {
+        await scheduleApprovalContinuation({
+          runtime,
+          config,
+          flow: resolved,
+          bot: botRuntime.bot,
+        });
+        return {
+          toast: {
+            type: "success",
+            content: decision === "approve" ? "已放行。" : "已拒绝。",
+          },
+          card: {
+            type: "raw",
+            data: buildApprovalContinuingCard(resolved),
           },
         };
       } catch (error) {

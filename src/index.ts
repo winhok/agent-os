@@ -9,6 +9,7 @@ import {
   buildClarificationSupersededCard,
   buildSessionNoticeCard,
   buildTaskCard,
+  buildApprovalCard,
   splitLongText,
   ThrottledCardUpdater,
 } from "./im/card.js";
@@ -21,6 +22,8 @@ import type { ActiveRun } from "./core/task-abort.js";
 import { ClarificationFlowStore, findClarificationRequest, formatClarificationMessage } from "./core/clarification.js";
 import type { ProductSpecRequest } from "./core/product-spec.js";
 import { JsonProductSpecFlowStore } from "./core/product-spec-store.js";
+import { DEFAULT_APPROVAL_TIMEOUT_SECONDS, findApprovalRequest } from "./core/approval.js";
+import { JsonApprovalFlowStore } from "./core/approval-store.js";
 import { JsonScheduleStore } from "./core/schedule-store.js";
 import { JsonScheduleRunStore } from "./core/schedule-run-store.js";
 import { topicTaskId } from "./core/topic-task.js";
@@ -37,7 +40,7 @@ import { buildBotPrompt, loadAgentOsConfig, type BotConfig } from "./core/bot-re
 import { TeamRegistry } from "./core/team-registry.js";
 import { getCliAdapter, listCliAdapters } from "./cli/registry.js";
 import { compactCliSession } from "./cli/native-compact.js";
-import { createCardActionHandler } from "./app/card-action-handler.js";
+import { createCardActionHandler, scheduleApprovalContinuation } from "./app/card-action-handler.js";
 import { assertProductSpecDocuments } from "./app/product-spec-documents.js";
 import { executeCli } from "./app/cli-execution.js";
 import { handleSessionCommand } from "./app/command-handler.js";
@@ -70,6 +73,7 @@ const processedCollaborationTurns = new Set<string>();
 const collaborationInbox = new CollaborationInbox();
 const clarificationFlows = new ClarificationFlowStore();
 const productSpecFlows = new JsonProductSpecFlowStore(join("data", "product-spec-flows.json"));
+const approvalFlows = new JsonApprovalFlowStore(join("data", "approval-flows.json"));
 const processedDocumentCommentEvents = new Set<string>();
 const documentCommentQueues = new Map<string, Promise<void>>();
 const MAX_REMEMBERED_DOCUMENT_COMMENT_EVENTS = 1_000;
@@ -83,6 +87,7 @@ const runtime: AppRuntime = {
   collaborationInbox,
   clarificationFlows,
   productSpecFlows,
+  approvalFlows,
 };
 const collaborationService = new CollaborationService(runtime);
 const scheduleFilePath = join("data", "schedules.json");
@@ -349,6 +354,7 @@ async function startConfiguredBot(config: BotConfig, collaborationService: Colla
             session.workspaceDir,
             session.cliSessionId,
             run.signal,
+            ["request_approval"],
             (event) => {
               if (event.type !== "tool_start" && event.type !== "tool_end" && event.type !== "context") return;
               progress.accept(event);
@@ -413,6 +419,7 @@ async function startConfiguredBot(config: BotConfig, collaborationService: Colla
                   session.workspaceDir,
                   resultSessionId ?? session.cliSessionId,
                   run.signal,
+                  [],
                   (event) => {
                     if (event.type !== "tool_start" && event.type !== "tool_end" && event.type !== "context") return;
                     progress.accept(event);
@@ -478,6 +485,56 @@ async function startConfiguredBot(config: BotConfig, collaborationService: Colla
               replyInThread: hasThread,
             });
             console.log("[产品文档] 已展示待确认产物");
+            return;
+          }
+          const approvalRequest = !isCompacting ? findApprovalRequest(finalResult.toolCalls) : undefined;
+          if (approvalRequest) {
+            const flow = approvalFlows.create({
+              taskId,
+              botId: config.id,
+              sessionId: session.id,
+              ownerOpenId: collaboration?.ownerOpenId ?? msg.senderOpenId,
+              ownerUnionId: collaboration?.ownerUnionId ?? msg.senderUnionId,
+              collaboration: collaboration ? collaborationOrigin(collaboration) : undefined,
+              originalMessageId: msg.messageId,
+              cardMessageId: cardId,
+              replyInThread: hasThread,
+              request: approvalRequest,
+            });
+            if (activeRuns.get(session.id)?.controller === run) {
+              activeRuns.delete(session.id);
+            }
+            await markSessionIdle(sessions, session.id);
+            await cardUpdater.finish(buildApprovalCard(flow));
+            await sendResultNotification({
+              bot,
+              replyToMessageId: msg.messageId,
+              target: { openId: flow.ownerOpenId, name: "" },
+              text: "开发者请求执行高危操作，请在上方卡片中拍板。",
+              replyInThread: hasThread,
+            });
+            console.log(`[审批] 已展示审批卡 flow=${flow.token}`);
+            const timeoutMs = (approvalRequest.timeoutSeconds ?? DEFAULT_APPROVAL_TIMEOUT_SECONDS) * 1_000;
+            const timeout = setTimeout(() => {
+              void (async () => {
+                const current = approvalFlows.get(flow.token);
+                if (!current || current.status !== "pending") return;
+                const expired = approvalFlows.expire(flow.token);
+                const botRuntime = botRuntimes.get(config.id);
+                if (!expired || !botRuntime) return;
+                try {
+                  await scheduleApprovalContinuation({
+                    runtime,
+                    config,
+                    flow: expired,
+                    bot: botRuntime.bot,
+                  });
+                } catch (error) {
+                  console.error("[审批] 超时自动拒绝失败:", (error as Error).message);
+                }
+              })();
+            }, timeoutMs);
+            timeout.unref?.();
             return;
           }
 

@@ -71,6 +71,7 @@ export async function continueClarificationFlow(options: {
       session.workspaceDir,
       session.cliSessionId,
       run.signal,
+      [],
       (event) => {
         if (event.type !== "tool_start" && event.type !== "tool_end" && event.type !== "context") return;
         progress.accept(event);
@@ -122,6 +123,7 @@ export async function continueClarificationFlow(options: {
             session.workspaceDir,
             resultSessionId ?? session.cliSessionId,
             run.signal,
+            [],
             (event) => {
               if (event.type !== "tool_start" && event.type !== "tool_end" && event.type !== "context") return;
               progress.accept(event);

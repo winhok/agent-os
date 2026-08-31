@@ -3,6 +3,7 @@ import {
   CLARIFICATION_TOOL_NAME,
   PRODUCT_SPEC_TOOL_NAME,
   DISPATCH_TASK_TOOL_NAME,
+  REQUEST_APPROVAL_TOOL_NAME,
   SCHEDULE_MANAGE_TOOL_NAME,
   codexAppToolArgs,
 } from "./app-tools.js";
@@ -97,22 +98,26 @@ export class CodexAdapter implements CliAdapter {
 
   buildArgs(prompt: string, promptInput: CliPromptInput): string[] {
     const args = [...codexAppToolArgs(), "exec", "--json", "--skip-git-repo-check"];
+    // Windows 上沙箱功能不支持，必须完全禁用；approvals 也一并绕过。
     if (process.platform === "win32") {
       args.push("--dangerously-bypass-approvals-and-sandbox");
     } else {
       args.push("--yolo");
     }
+    // 从 stdin 读取 prompt，规避 Windows 下 shell 参数转义问题。
     args.push(promptInput === "stdin" ? "-" : prompt);
     return args;
   }
 
   buildResumeArgs(prompt: string, sessionId: string, promptInput: CliPromptInput): string[] {
     const args = [...codexAppToolArgs(), "exec", "resume", "--json", "--skip-git-repo-check", sessionId];
+    // Windows 上沙箱功能不支持，必须完全禁用；approvals 也一并绕过。
     if (process.platform === "win32") {
       args.push("--dangerously-bypass-approvals-and-sandbox");
     } else {
       args.push("--yolo");
     }
+    // 从 stdin 读取 prompt，规避 Windows 下 shell 参数转义问题。
     args.push(promptInput === "stdin" ? "-" : prompt);
     return args;
   }
@@ -167,6 +172,7 @@ export class CodexAdapter implements CliAdapter {
         (item.tool === CLARIFICATION_TOOL_NAME ||
           item.tool === PRODUCT_SPEC_TOOL_NAME ||
           item.tool === DISPATCH_TASK_TOOL_NAME ||
+          item.tool === REQUEST_APPROVAL_TOOL_NAME ||
           item.tool === SCHEDULE_MANAGE_TOOL_NAME)
       ) {
         events.push({
