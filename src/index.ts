@@ -719,7 +719,11 @@ async function startConfiguredBot(config: BotConfig, collaborationService: Colla
   const botRuntime = { config, bot: startedBot, identity };
   botRuntimes.set(config.id, botRuntime);
   if (config.skills.includes("lark-drive")) {
-    await startedBot.subscribeToDocumentComments();
+    try {
+      await startedBot.subscribeToDocumentComments();
+    } catch (error) {
+      console.warn(`[Bot ${config.id}] 文档评论订阅失败，不影响消息链路:`, (error as Error).message);
+    }
   }
   console.log(`[Bot ${config.id.toUpperCase()}] 已连接 name=${identity.name} open_id=${identity.openId}`);
 }

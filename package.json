@@ -6,13 +6,14 @@
   "main": "index.js",
   "scripts": {
     "dev": "pnpm start",
-    "start": "tsx watch --include .env --include 'config/*.json' src/index.ts",
+    "start": "tsx watch --include .env --include \"config/*.json\" src/index.ts",
     "start:once": "tsx src/index.ts",
+    "start:prod": "node dist/index.js",
+    "agent-os": "tsx src/deploy-cli.ts",
+    "probe": "tsx src/probe-lark.ts",
     "build": "tsc",
     "probe:cli": "tsx src/probe-cli.ts",
-    "probe:tool": "tsx src/probe-app-tool.ts",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "probe:tool": "tsx src/probe-app-tool.ts"
   },
   "engines": {
     "node": ">=22"
@@ -20,7 +21,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@11.24.0",
+  "packageManager": "pnpm@12.0.0",
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.73.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
