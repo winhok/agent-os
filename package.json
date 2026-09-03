@@ -10,7 +10,6 @@
     "start:once": "tsx src/index.ts",
     "start:prod": "node dist/index.js",
     "agent-os": "tsx src/deploy-cli.ts",
-    "probe": "tsx src/probe-lark.ts",
     "build": "tsc",
     "probe:cli": "tsx src/probe-cli.ts",
     "probe:tool": "tsx src/probe-app-tool.ts"
