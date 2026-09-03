@@ -110,8 +110,8 @@ importers:
   .:
     dependencies:
       '@larksuiteoapi/node-sdk':
-        specifier: ^1.73.0
-        version: 1.73.0(debug@4.4.3)
+        specifier: ^1.73.2
+        version: 1.73.2(debug@4.4.3)
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(zod@4.5.4)
@@ -129,8 +129,8 @@ importers:
         version: 4.5.4
     devDependencies:
       '@types/node':
-        specifier: ^26.4.0
-        version: 26.4.0
+        specifier: ^26.4.1
+        version: 26.4.1
       prettier:
         specifier: ^3.9.6
         version: 3.9.6
@@ -305,8 +305,8 @@ packages:
     peerDependencies:
       hono: ^4
 
-  '@larksuiteoapi/node-sdk@1.73.0':
-    resolution: {integrity: sha512-gs4EiupJ6RdYAEJGtuYrCVsB7wSMBwtUDK+ilpmOHD6RTvbtciW6AWciQO9coOQVuBZfh7hvAi25dPfCsny/nA==}
+  '@larksuiteoapi/node-sdk@1.73.2':
+    resolution: {integrity: sha512-USbVMpAI0WR9mo85JvbP79Tz3Kj59OD4iRrnKc+pHVQfyh+eHKgBPm9dlcv9if2wrB9EASIV4mypicdBIJkTsA==}
 
   '@modelcontextprotocol/sdk@1.30.0':
     resolution: {integrity: sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==}
@@ -347,6 +347,9 @@ packages:
 
   '@types/node@26.4.0':
     resolution: {integrity: sha512-faiGnoIrLH/V8cibOMEAZ8pMw6oXqSukl29ra4mN8GdaB2ZewzeaLj+INpV5N+Z1eKWzY+IzaIZH2EIR6YZRNQ==}
+
+  '@types/node@26.4.1':
+    resolution: {integrity: sha512-k97ENvZWtvA6yqz5/FS6a7duDgOPEeOQOc2iKS/nY6mX6qJUKtLnWzQS+Xj6tXweyj6ZcTAK2Qecetnvi9nCLA==}
 
   '@typescript/typescript-aix-ppc64@7.0.2':
     resolution: {integrity: sha512-MTKKkWB7p/0E9xi1d1tHtZ5PiLkGEMIq88pK2CubZjOsLtYTLqhgIgi6zepFa+9GHZ6h05NMCkQxGKiPXMxXtQ==}
@@ -1029,7 +1032,7 @@ snapshots:
     dependencies:
       hono: 4.13.2
 
-  '@larksuiteoapi/node-sdk@1.73.0(debug@4.4.3)':
+  '@larksuiteoapi/node-sdk@1.73.2(debug@4.4.3)':
     dependencies:
       axios: 1.19.0(debug@4.4.3)
       lodash.identity: 3.0.0
@@ -1087,6 +1090,10 @@ snapshots:
   '@protobufjs/utf8@1.1.2': {}
 
   '@types/node@26.4.0':
+    dependencies:
+      undici-types: 8.3.0
+
+  '@types/node@26.4.1':
     dependencies:
       undici-types: 8.3.0
 

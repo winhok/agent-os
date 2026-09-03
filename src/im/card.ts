@@ -1239,6 +1239,7 @@ export function splitLongText(text: string, maxLength = 4_000): string[] {
 }
 
 type UpdateCard = (card: CardJson) => Promise<void>;
+type CardUpdatePhase = "progress" | "final";
 
 /** 一秒窗口内无论 push 多少次，只提交最新的一张卡片。 */
 export class ThrottledCardUpdater {
@@ -1264,8 +1265,8 @@ export class ThrottledCardUpdater {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
     this.pendingCard = undefined;
-    await this.updateChain.catch(() => undefined);
-    await this.updateCard(finalCard);
+    await this.updateChain;
+    await this.performUpdate(finalCard, "final");
   }
 
   async cancel(): Promise<void> {
@@ -1274,7 +1275,7 @@ export class ThrottledCardUpdater {
     if (this.timer) clearTimeout(this.timer);
     this.timer = undefined;
     this.pendingCard = undefined;
-    await this.updateChain.catch(() => undefined);
+    await this.updateChain;
   }
 
   private schedule(): void {
@@ -1291,9 +1292,18 @@ export class ThrottledCardUpdater {
     if (!card || this.closed) return;
 
     this.updateChain = this.updateChain
-      .then(() => this.updateCard(card))
+      .then(() => this.performUpdate(card, "progress"))
       .finally(() => {
         if (this.pendingCard && !this.closed) this.schedule();
       });
+  }
+
+  private async performUpdate(card: CardJson, phase: CardUpdatePhase): Promise<void> {
+    try {
+      await this.updateCard(card);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error(`[卡片] ${phase === "progress" ? "进度" : "最终状态"}更新失败（任务继续）:`, detail);
+    }
   }
 }
