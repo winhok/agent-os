@@ -138,7 +138,8 @@ export function buildBotPrompt(
   const managesProductDocuments = config.skills.some((skill) => ["to-spec", "to-tickets", "lark-doc"].includes(skill));
   const productDeliveryPolicy = managesProductDocuments
     ? [
-        "产品方案交付规则（必须遵守）：",
+        "产品方案交付规则（仅在当前派发要求形成或更新待审批方案时适用）：",
+        "- 按 CEO 本次派发的目标、范围和预期交付执行；解释、分析或补充说明完成后交回结果，不自行升级为方案编写或审批。",
         `- 当前默认交付方式：${defaultProductDeliveryMode}。`,
         "- 用户明确指定本地 Markdown 或飞书云文档时，以用户本次选择覆盖默认值。",
         "- 不要为了选择交付格式单独发起澄清。",
@@ -163,10 +164,11 @@ export function buildBotPrompt(
     config.skills.length > 0
       ? [
           "项目 Skill 加载规则（优先级不可颠倒）：",
-          "- 对配置中声明的每个 Skill，先读取当前工作区 `.agents/skills/<skill>/SKILL.md`。",
+          "- 配置中的 Skills 是角色可用能力，按当前派发要求选择适用项，不要求全部执行；已读且仍有效的内容可以复用。",
+          "- 对当前适用的 Skill，先读取当前工作区 `.agents/skills/<skill>/SKILL.md`。",
           "- 上述路径不存在时，再读取当前工作区 `.claude/skills/<skill>/SKILL.md`。",
           "- 只有两个工作区路径都不存在时，才允许回退到用户级或全局同名 Skill；不得因全局 Skill 同名而跳过工作区版本。",
-          `本次任务必须执行的项目 Skill：${config.skills.map((skill) => `$${skill}`).join("、")}`,
+          `角色可用的项目 Skills：${config.skills.join("、")}`,
         ].join("\n")
       : "",
     feishuOutputPolicy,

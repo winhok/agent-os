@@ -18,6 +18,7 @@ import { markSessionIdle } from "./session-view.js";
 import type { AppRuntime } from "./runtime.js";
 import { assertProductSpecDocuments } from "./product-spec-documents.js";
 import { ensureProductSpecSubmission } from "./product-spec-submission.js";
+import type { CollaborationService } from "./collaboration-service.js";
 
 export async function continueClarificationFlow(options: {
   runtime: AppRuntime;
@@ -26,8 +27,9 @@ export async function continueClarificationFlow(options: {
   flow: ClarificationFlow;
   run: AbortController;
   defaultDeliveryMode: "local" | "lark-doc";
+  collaborationService: CollaborationService;
 }): Promise<void> {
-  const { bot, config, flow, run, runtime, defaultDeliveryMode } = options;
+  const { bot, config, flow, run, runtime } = options;
   const session = runtime.sessions.get(flow.sessionId);
   if (!session) throw new Error("需求澄清对应的会话已经失效");
 
@@ -111,33 +113,30 @@ export async function continueClarificationFlow(options: {
       return;
     }
 
-    const managesProductSpec = config.skills.includes("to-spec") || config.skills.includes("lark-doc");
-    if (managesProductSpec) {
-      const submission = await ensureProductSpecSubmission({
-        result,
-        defaultDeliveryMode,
-        retry: (retryPrompt, resultSessionId) =>
-          executeCli(
-            adapter,
-            retryPrompt,
-            session.workspaceDir,
-            resultSessionId ?? session.cliSessionId,
-            run.signal,
-            [],
-            (event) => {
-              if (event.type !== "tool_start" && event.type !== "tool_end" && event.type !== "context") return;
-              progress.accept(event);
-              renderProgress();
-            },
-          ),
-      });
-      const { request: productSpecRequest } = submission;
-      if (submission.result.sessionId) {
-        await runtime.sessions.setCliSessionId(session.id, submission.result.sessionId);
-      }
-      if (submission.result.stats?.contextWindowTokens) {
-        runtime.contextWindows.set(session.id, submission.result.stats.contextWindowTokens);
-      }
+    const submission = await ensureProductSpecSubmission({
+      result,
+      required: flow.collaboration?.requiresSpecApproval ?? false,
+      defaultDeliveryMode: options.defaultDeliveryMode,
+      retry: (retryPrompt, resultSessionId) =>
+        executeCli(
+          adapter,
+          retryPrompt,
+          session.workspaceDir,
+          resultSessionId ?? session.cliSessionId,
+          run.signal,
+          [],
+          (event) => {
+            if (event.type !== "tool_start" && event.type !== "tool_end" && event.type !== "context") return;
+            progress.accept(event);
+            renderProgress();
+          },
+        ),
+    });
+    if (submission.result.sessionId) await runtime.sessions.setCliSessionId(session.id, submission.result.sessionId);
+    if (submission.result.stats?.contextWindowTokens)
+      runtime.contextWindows.set(session.id, submission.result.stats.contextWindowTokens);
+    const productSpecRequest = submission.request;
+    if (productSpecRequest) {
       if (productSpecRequest.deliveryMode === "local") {
         await assertProductSpecDocuments(session.workspaceDir, productSpecRequest);
       }
@@ -176,11 +175,34 @@ export async function continueClarificationFlow(options: {
         await bot.reply(flow.originalMessageId, chunk, flow.replyInThread);
       }
     }
+    const origin = flow.collaboration;
+    if (origin && origin.reportToBotId !== config.id && origin.round < origin.maxRounds) {
+      await options.collaborationService.dispatch({
+        senderConfig: config,
+        senderBot: bot,
+        replyToMessageId: progressCardMessageId,
+        targetBotId: origin.reportToBotId,
+        taskId: origin.taskId,
+        ownerOpenId: flow.ownerOpenId,
+        ownerUnionId: flow.ownerUnionId,
+        reportToBotId: origin.reportToBotId,
+        objective: `澄清后任务结果：${flow.request.title}`,
+        instruction: `${config.role} 已基于澄清答案返回结果：\n\n${result.answer}\n\n请继续组织原任务，或在满足目标时向用户交付。`,
+        expectedOutput: "按原任务目标继续推进或交付。",
+        round: origin.round + 1,
+        maxRounds: origin.maxRounds,
+        workspaceDir: session.workspaceDir,
+      });
+      return;
+    }
     await sendResultNotification({
       bot,
       replyToMessageId: flow.originalMessageId,
       target: { openId: flow.ownerOpenId, name: "" },
-      text: "需求澄清已完成，请查看上方结果。",
+      text:
+        origin && origin.round >= origin.maxRounds
+          ? "澄清后的结果已生成，但协作已达轮次上限，请查看结果并决定下一步。"
+          : "需求澄清已完成，请查看上方结果。",
       replyInThread: flow.replyInThread,
     });
   } catch (error) {

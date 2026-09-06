@@ -138,6 +138,7 @@ server.registerTool(
       "只有 CEO 助理可以在运行时调用；产品经理和开发者调用会被拒绝。",
       "targetBotId 必须是团队名单中的成员 id，不能填写自己。",
       "objective 写协作目标，instruction 写交给对方的完整要求，expectedOutput 写期望产出。",
+      "requiresSpecApproval：形成或更新待审批产品方案时必须为 true；解释、分析、补充说明和开发实现为 false。",
       "调用后停止工作，等待对方完成并把结果交回。",
     ].join(""),
     inputSchema: DispatchTaskRequestSchema,

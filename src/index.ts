@@ -20,7 +20,7 @@ import { JsonSessionStore } from "./core/session-store.js";
 import { TaskProgressTracker } from "./core/task-progress.js";
 import type { ActiveRun } from "./core/task-abort.js";
 import { ClarificationFlowStore, findClarificationRequest, formatClarificationMessage } from "./core/clarification.js";
-import type { ProductSpecRequest } from "./core/product-spec.js";
+import { ensureProductSpecSubmission } from "./app/product-spec-submission.js";
 import { JsonProductSpecFlowStore } from "./core/product-spec-store.js";
 import { DEFAULT_APPROVAL_TIMEOUT_SECONDS, findApprovalRequest } from "./core/approval.js";
 import { JsonApprovalFlowStore } from "./core/approval-store.js";
@@ -47,7 +47,6 @@ import { handleSessionCommand } from "./app/command-handler.js";
 import { sendResultNotification } from "./app/notification-service.js";
 import { markSessionIdle } from "./app/session-view.js";
 import { runProductDocumentComment } from "./app/product-comment-runner.js";
-import { ensureProductSpecSubmission } from "./app/product-spec-submission.js";
 import { CollaborationService } from "./app/collaboration-service.js";
 import { Scheduler } from "./app/scheduler.js";
 import { startScheduleApi } from "./app/schedule-api.js";
@@ -383,7 +382,7 @@ async function startConfiguredBot(config: BotConfig, collaborationService: Colla
               sessionId: session.id,
               ownerOpenId: collaboration?.ownerOpenId ?? msg.senderOpenId,
               ownerUnionId: collaboration?.ownerUnionId ?? msg.senderUnionId,
-              collaboration: collaboration ? collaborationOrigin(collaboration) : undefined,
+              collaboration: collaboration ? collaborationOrigin(collaboration) : pendingClarification?.collaboration,
               originalMessageId: msg.messageId,
               cardMessageId: cardId,
               replyInThread: hasThread,
@@ -404,39 +403,36 @@ async function startConfiguredBot(config: BotConfig, collaborationService: Colla
             console.log(`[澄清] 已发送交互卡片 questions=${clarificationRequest.questions.length}`);
             return;
           }
-          let finalResult = result;
-          let productSpecRequest: ProductSpecRequest | undefined;
-          const managesProductSpec =
-            !isCompacting && (config.skills.includes("to-spec") || config.skills.includes("lark-doc"));
-          if (managesProductSpec) {
-            const submission = await ensureProductSpecSubmission({
-              result,
-              defaultDeliveryMode: agentOsConfig.defaultProductDeliveryMode,
-              retry: (retryPrompt, resultSessionId) =>
-                executeCli(
-                  cliAdapter,
-                  retryPrompt,
-                  session.workspaceDir,
-                  resultSessionId ?? session.cliSessionId,
-                  run.signal,
-                  [],
-                  (event) => {
-                    if (event.type !== "tool_start" && event.type !== "tool_end" && event.type !== "context") return;
-                    progress.accept(event);
-                    renderProgress();
-                  },
-                  cliEnv,
-                ),
-            });
-            finalResult = submission.result;
-            productSpecRequest = submission.request;
-            if (finalResult.sessionId) {
-              await sessions.setCliSessionId(session.id, finalResult.sessionId);
-            }
-            if (finalResult.stats?.contextWindowTokens) {
-              contextWindows.set(session.id, finalResult.stats.contextWindowTokens);
-            }
-          }
+          const submission = isCompacting
+            ? { result, request: undefined }
+            : await ensureProductSpecSubmission({
+                result,
+                required:
+                  collaboration?.requiresSpecApproval ??
+                  pendingClarification?.collaboration?.requiresSpecApproval ??
+                  false,
+                defaultDeliveryMode: agentOsConfig.defaultProductDeliveryMode,
+                retry: (retryPrompt, resultSessionId) =>
+                  executeCli(
+                    cliAdapter,
+                    retryPrompt,
+                    session.workspaceDir,
+                    resultSessionId ?? session.cliSessionId,
+                    run.signal,
+                    [],
+                    (event) => {
+                      if (event.type !== "tool_start" && event.type !== "tool_end" && event.type !== "context") return;
+                      progress.accept(event);
+                      renderProgress();
+                    },
+                    cliEnv,
+                  ),
+              });
+          const finalResult = submission.result;
+          const productSpecRequest = submission.request;
+          if (finalResult.sessionId) await sessions.setCliSessionId(session.id, finalResult.sessionId);
+          if (finalResult.stats?.contextWindowTokens)
+            contextWindows.set(session.id, finalResult.stats.contextWindowTokens);
           const dispatchRequest = !isCompacting ? findDispatchTaskRequest(finalResult.toolCalls) : undefined;
           if (dispatchRequest) {
             if (config.id !== agentOsConfig.teamLeaderId) {
@@ -470,7 +466,7 @@ async function startConfiguredBot(config: BotConfig, collaborationService: Colla
               sessionId: session.id,
               ownerOpenId: collaboration?.ownerOpenId ?? msg.senderOpenId,
               ownerUnionId: collaboration?.ownerUnionId ?? msg.senderUnionId,
-              collaboration: collaboration ? collaborationOrigin(collaboration) : undefined,
+              collaboration: collaboration ? collaborationOrigin(collaboration) : pendingClarification?.collaboration,
               request: productSpecRequest,
             });
             await cardUpdater.finish(buildProductSpecApprovalCard(flow));
@@ -495,7 +491,7 @@ async function startConfiguredBot(config: BotConfig, collaborationService: Colla
               sessionId: session.id,
               ownerOpenId: collaboration?.ownerOpenId ?? msg.senderOpenId,
               ownerUnionId: collaboration?.ownerUnionId ?? msg.senderUnionId,
-              collaboration: collaboration ? collaborationOrigin(collaboration) : undefined,
+              collaboration: collaboration ? collaborationOrigin(collaboration) : pendingClarification?.collaboration,
               originalMessageId: msg.messageId,
               cardMessageId: cardId,
               replyInThread: hasThread,
@@ -590,6 +586,7 @@ async function startConfiguredBot(config: BotConfig, collaborationService: Colla
                   objective: dispatchRequest.objective,
                   instruction: dispatchRequest.instruction,
                   expectedOutput: dispatchRequest.expectedOutput,
+                  requiresSpecApproval: dispatchRequest.requiresSpecApproval,
                   round: collaboration ? collaboration.round + 1 : 1,
                   maxRounds: collaboration?.maxRounds ?? config.collaborationMaxRounds,
                   workspaceDir: session.workspaceDir,

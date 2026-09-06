@@ -50,7 +50,7 @@
 - `cli-execution.ts`：封装已有 CLI 会话的续接执行
 - `card-action-handler.ts`：路由澄清、方案确认、审批、会话恢复与任务停止等卡片动作
 - `clarification-runner.ts`、`approval-runner.ts`：把用户决定续接回原 CLI 会话并收束运行状态
-- `product-spec-submission.ts`、`product-spec-documents.ts`、`product-comment-runner.ts`：校验方案提交、关联本地或飞书产物，并通过文档评论续接原任务
+- `product-spec-submission.ts`、`product-spec-documents.ts`、`product-comment-runner.ts`：按 CEO 派发的 `requiresSpecApproval` 对漏提交补交一次，校验本地产物、关联飞书文档，并通过文档评论续接原任务；解释类任务不强制补交
 - `collaboration-service.ts`：确定性派发团队任务、发送协作卡片并持久化待消费消息
 - `notification-service.ts`：统一发送任务结果和 @ 通知
 - `scheduler.ts`：注册计时器、触发任务、去重运行、记录结果并恢复中断状态

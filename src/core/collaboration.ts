@@ -11,12 +11,14 @@ export interface CollaborationMessage {
   objective: string;
   instruction: string;
   expectedOutput?: string;
+  requiresSpecApproval?: boolean;
   round: number;
   maxRounds: number;
   workspaceDir: string;
 }
 
 export interface CollaborationOrigin {
+  requiresSpecApproval?: boolean;
   taskId: string;
   fromBotId: string;
   reportToBotId: string;
@@ -29,6 +31,10 @@ export const DispatchTaskRequestSchema = z.object({
   objective: z.string().trim().min(1).max(200),
   instruction: z.string().trim().min(1).max(2_000),
   expectedOutput: z.string().trim().min(1).max(500).optional(),
+  requiresSpecApproval: z
+    .boolean()
+    .default(false)
+    .describe("本次派发是否必须形成待审批产品方案；解释、分析和实现任务设为 false"),
 });
 
 export type DispatchTaskRequest = z.infer<typeof DispatchTaskRequestSchema>;
@@ -48,6 +54,7 @@ export function findDispatchTaskRequest(
 export function collaborationOrigin(message: CollaborationMessage): CollaborationOrigin {
   return {
     taskId: message.taskId,
+    requiresSpecApproval: message.requiresSpecApproval,
     fromBotId: message.fromBotId,
     reportToBotId: message.reportToBotId,
     round: message.round,
@@ -60,6 +67,9 @@ export function buildCollaborationPrompt(message: CollaborationMessage): string 
     `协作目标：${message.objective}`,
     `执行要求：${message.instruction}`,
     message.expectedOutput ? `期望产出：${message.expectedOutput}` : "",
+    message.requiresSpecApproval
+      ? "本次必须交付待审批方案：完成所选本地或飞书产物后调用 request_spec_approval；关键问题仍未决时先 request_clarification。"
+      : "本次不要求提交方案审批；按当前执行要求返回结果，不自行升级为待审批方案任务。",
     `完成后，把结果交回 ${message.reportToBotId} 继续组织后续工作；已经可以交付时，明确给出最终结论。`,
   ]
     .filter(Boolean)

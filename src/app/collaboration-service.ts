@@ -20,6 +20,7 @@ export interface CollaborationDispatch {
   objective: string;
   instruction: string;
   expectedOutput?: string;
+  requiresSpecApproval?: boolean;
   round: number;
   maxRounds: number;
   workspaceDir: string;
@@ -45,6 +46,7 @@ export class CollaborationService {
       objective: options.objective,
       instruction: options.instruction,
       expectedOutput: options.expectedOutput,
+      requiresSpecApproval: options.requiresSpecApproval,
       round: options.round,
       maxRounds: options.maxRounds,
       workspaceDir: options.workspaceDir,

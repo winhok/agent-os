@@ -222,6 +222,7 @@ export function createCardActionHandler(options: {
             flow: answered.flow,
             run,
             defaultDeliveryMode: defaultProductDeliveryMode,
+            collaborationService,
           }).catch((error) => {
             console.error("[澄清] 继续执行失败:", (error as Error).message);
           });
