@@ -143,6 +143,8 @@ export function buildBotPrompt(
         `- 当前默认交付方式：${defaultProductDeliveryMode}。`,
         "- 用户明确指定本地 Markdown 或飞书云文档时，以用户本次选择覆盖默认值。",
         "- 不要为了选择交付格式单独发起澄清。",
+        "- 默认方式为 lark-doc 时，待审批阶段只使用 lark-doc 生成面向用户的产品文档；不要提前运行 to-spec 或 to-tickets，也不要提交本地路径。",
+        "- 用户确认飞书产品文档后，如果收到生成 Agent 执行产物的后续任务，再使用 to-spec 与 to-tickets 生成本地 Spec/Tickets；这一步不再调用 request_spec_approval。",
         "- 方案产物完成后必须实际调用 request_spec_approval，并提交最终采用的 deliveryMode 与对应产物字段。",
         "- 不能只在普通回复中罗列 deliveryMode、documentUrl、specPath 或 ticketsPath。工具调用成功后停止本轮。",
       ].join("\n")

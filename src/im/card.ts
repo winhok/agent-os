@@ -972,7 +972,10 @@ export function buildProductSpecApprovalCard(flow: ProductSpecFlow): CardJson {
 
   elements.push({
     tag: "markdown",
-    content: "_确认后，已确认方案会交回 CEO 助理继续安排后续成员。_",
+    content:
+      flow.request.deliveryMode === "lark-doc"
+        ? "_确认后，CEO 助理会先安排生成本地 Agent 执行产物，再交给开发成员。_"
+        : "_确认后，已确认的本地 Agent 执行产物会交回 CEO 助理继续安排。_",
   });
 
   return {

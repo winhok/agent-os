@@ -64,7 +64,7 @@
 - `workspace.ts`、`topic-task.ts`、`command-parser.ts`：解析工作目录、话题/任务标识和用户命令
 - `session-manager.ts`、`session-store.ts`：管理以 bot、话题和工作目录为边界的会话状态与 JSON 持久化
 - `clarification.ts`：定义结构化问题、答案、所有者校验与澄清流程状态
-- `product-spec.ts`、`product-spec-store.ts`：定义唯一产品方案产物、确认状态与 JSON 持久化
+- `product-spec.ts`、`product-spec-store.ts`：定义面向用户审批的产品方案产物、确认状态与 JSON 持久化
 - `approval.ts`、`approval-store.ts`：定义高风险操作审批、超时/拒绝语义与 JSON 持久化
 - `collaboration.ts`：定义 `dispatch_task` 协议、协作来源、轮次去重键与持久化收件箱
 - `schedule.ts`、`schedule-store.ts`：定义一次性/间隔/Cron 计划及其原子持久化
@@ -91,6 +91,7 @@
 - 先沿真实运行调用链检查改动，不要只凭类型检查推断飞书、浏览器或外部 CLI 行为。
 - 保持 CLI 无关的核心状态与协议在 `src/core/` / `src/app/`，Claude 与 Codex 差异留在各自适配器内。
 - 更改结构化工具或卡片协议时，同时检查 MCP 注册、Claude/Codex 事件归一化、提交解析、状态持久化、续接逻辑、授权边界和用户可见反馈。
+- 默认以飞书文档交付产品方案时，用户只评论和审批飞书产品文档；确认后由产品 bot 基于已批准版本生成本地 Spec/Tickets，再交给开发 bot 执行。本地产物面向 Agent，不重复发起用户审批，也不得扩大已批准范围。
 - 更改 bot 配置字段时，同步检查 Zod schema、示例配置、团队展示和启动时校验。
 - 会话以 bot、话题和工作目录为边界；切换工作目录时必须清除旧 CLI 会话绑定，恢复会话前必须校验 CLI 类型、原生会话 ID 与当前工作目录。
 - 协作任务必须由 `dispatch_task` 进入确定性派发链：目标只能是已注册且非自身的 bot，工作目录与原始用户身份随任务传递，澄清/方案确认后仍需回到原协作链，并受轮次上限和重复消费保护。

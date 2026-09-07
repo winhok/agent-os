@@ -98,9 +98,10 @@ export function createCardActionHandler(options: {
           return { toast: { type: "error", content: "当前 Bot 尚未就绪。" } };
         }
         const collaboration = approved.collaboration;
+        const usesLarkDocument = approved.request.deliveryMode === "lark-doc";
         const productDescription =
           approved.request.deliveryMode === "lark-doc"
-            ? `文档 URL：${approved.request.documentUrl}`
+            ? `已确认产品文档：${approved.request.documentUrl}`
             : `Spec：${approved.request.specPath}\nTickets：${approved.request.ticketsPath}`;
         try {
           await collaborationService.dispatch({
@@ -119,9 +120,17 @@ export function createCardActionHandler(options: {
               `方案摘要：${approved.request.summary}`,
               productDescription,
               `确认记录：${approved.approvedAt ?? ""}`,
-              "请基于这份已确认方案继续组织后续工作：需要开发者实现时，使用 dispatch_task 把方案交给 developer。",
+              usesLarkDocument
+                ? [
+                    "先使用 dispatch_task 把已确认产品文档交给 product，requiresSpecApproval=false。",
+                    "要求 product 基于已确认版本使用 to-spec 与 to-tickets 生成本地 Agent 执行产物，不得扩大产品范围，也不要再次发起方案审批。",
+                    "收到本地 Spec/Tickets 路径后，再使用 dispatch_task 交给 developer 实现。",
+                  ].join("\n")
+                : "本地 Spec/Tickets 已经确认；需要开发者实现时，使用 dispatch_task 把方案交给 developer。",
             ].join("\n\n"),
-            expectedOutput: "继续推进原任务，或在已经完成时向用户给出最终结论。",
+            expectedOutput: usesLarkDocument
+              ? "先取得与已确认产品文档一致的本地 Spec/Tickets，再交给开发者执行。"
+              : "继续推进原任务，或在已经完成时向用户给出最终结论。",
             round: collaboration.round + 1,
             maxRounds: collaboration.maxRounds,
             workspaceDir: runtime.sessions.get(approved.sessionId)?.workspaceDir ?? config.workspaceDir,

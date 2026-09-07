@@ -111,7 +111,8 @@ server.registerTool(
     description: [
       "产品方案已经生成后，调用此工具提交唯一的待确认产物。",
       "deliveryMode=local 时提交 specPath 与 ticketsPath，并确保文件真实存在。",
-      "deliveryMode=lark-doc 时只提交 documentUrl，且必须使用 lark-doc 创建或更新成功结果中的 document.url；该文档必须同时包含产品说明与「实现任务（Tickets）」章节。",
+      "deliveryMode=lark-doc 时只提交 documentUrl，且必须使用 lark-doc 创建或更新成功结果中的 document.url；该文档是面向用户评论和审批的产品文档。",
+      "默认方式为 lark-doc 时，不要在审批前运行 to-spec 或 to-tickets；本地 Spec/Tickets 会在用户确认产品文档后另行生成，且无需再次审批。",
       "同一份方案不要同时维护本地 Markdown 和飞书云文档，避免两个来源互相覆盖。",
       "summary 只写便于快速了解方案的摘要，完整内容保留在所选产物中。",
       "提交前必须完成需求澄清，确保这份方案已经可以确认。",
