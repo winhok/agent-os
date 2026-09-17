@@ -119,6 +119,7 @@ async function startConfiguredBot(config: BotConfig, collaborationService: Colla
       config,
       collaborationService,
       defaultProductDeliveryMode: agentOsConfig.defaultProductDeliveryMode,
+      pendingProductDocumentComments: (sessionId) => documentCommentQueues.get(sessionId),
     }),
     onDocumentComment: config.skills.includes("lark-drive")
       ? async (comment, bot) => scheduleDocumentComment(config, bot, comment)

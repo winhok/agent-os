@@ -58,8 +58,9 @@ export function createCardActionHandler(options: {
   config: BotConfig;
   collaborationService: CollaborationService;
   defaultProductDeliveryMode: ProductDeliveryMode;
+  pendingProductDocumentComments: (sessionId: string) => Promise<void> | undefined;
 }): (action: CardAction) => Promise<CardActionResponse | undefined> {
-  const { runtime, config, collaborationService, defaultProductDeliveryMode } = options;
+  const { runtime, config, collaborationService, defaultProductDeliveryMode, pendingProductDocumentComments } = options;
   return async (action) => {
     if (action.value.action === "approve_product_spec") {
       const flowToken = typeof action.value.flowToken === "string" ? action.value.flowToken : "";
@@ -88,6 +89,7 @@ export function createCardActionHandler(options: {
       if (!isProductSpecOwner(flow, action)) {
         return { toast: { type: "warning", content: "只有任务发起人可以确认。" } };
       }
+      const pendingComments = pendingProductDocumentComments(flow.sessionId);
       const approved = runtime.productSpecFlows.approve(flowToken);
       if (!approved) {
         return { toast: { type: "warning", content: "方案状态已经更新。" } };
@@ -103,8 +105,8 @@ export function createCardActionHandler(options: {
           approved.request.deliveryMode === "lark-doc"
             ? `已确认产品文档：${approved.request.documentUrl}`
             : `Spec：${approved.request.specPath}\nTickets：${approved.request.ticketsPath}`;
-        try {
-          await collaborationService.dispatch({
+        const dispatchApproved = () =>
+          collaborationService.dispatch({
             senderConfig: config,
             senderBot: botRuntime.bot,
             replyToMessageId: action.messageId,
@@ -135,6 +137,27 @@ export function createCardActionHandler(options: {
             maxRounds: collaboration.maxRounds,
             workspaceDir: runtime.sessions.get(approved.sessionId)?.workspaceDir ?? config.workspaceDir,
           });
+        if (pendingComments) {
+          queueMicrotask(() => {
+            void pendingComments
+              .catch((error) => {
+                console.error("[产品评论] 确认时等待评论处理失败，继续派发:", (error as Error).message);
+              })
+              .then(dispatchApproved)
+              .catch((error) => {
+                console.error("[产品方案] 评论处理完成后继续派发失败:", (error as Error).message);
+              });
+          });
+          return {
+            toast: { type: "success", content: "产品方案已确认，将在评论处理完成后继续。" },
+            card: {
+              type: "raw",
+              data: buildProductSpecApprovedCard(approved),
+            },
+          };
+        }
+        try {
+          await dispatchApproved();
         } catch (error) {
           return {
             toast: {
