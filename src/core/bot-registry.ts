@@ -109,7 +109,9 @@ export async function loadAgentOsConfig(
     content = await readFile(filePath, "utf8");
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      throw new Error(`找不到 bot 配置文件: ${filePath}。请复制 config/bots.example.json 后填写配置。`);
+      throw new Error(`找不到 bot 配置文件: ${filePath}。请复制 config/bots.example.json 后填写配置。`, {
+        cause: error,
+      });
     }
     throw error;
   }
@@ -117,7 +119,7 @@ export async function loadAgentOsConfig(
   try {
     return parseAgentOsConfig(JSON.parse(content), env, baseDirectory);
   } catch (error) {
-    throw new Error(`bot 配置文件格式错误: ${(error as Error).message}`);
+    throw new Error(`bot 配置文件格式错误: ${(error as Error).message}`, { cause: error });
   }
 }
 

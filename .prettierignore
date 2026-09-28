@@ -3,4 +3,8 @@ data/
 dist/
 logs/
 node_modules/
+.pnpm-store/
+.agents/
+.claude/
+.codex/
 pnpm-lock.yaml

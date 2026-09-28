@@ -70,19 +70,42 @@ export const ScheduleManageRequestSchema = z.discriminatedUnion("action", [
 
 export type ScheduleManageRequest = z.infer<typeof ScheduleManageRequestSchema>;
 
-export interface ScheduledTask {
-  id: string;
-  creatorOpenId: string;
-  chatId: string;
-  targetBotId: string;
-  prompt: string;
-  rule: ScheduleRule;
-  status: "active" | "paused" | "completed";
-  nextRunAt?: string;
-  lastRunAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
+export const ScheduledTaskSchema = z.object({
+  id: z.string().min(1),
+  creatorOpenId: z.string().min(1),
+  chatId: z.string().min(1),
+  targetBotId: z.string().min(1),
+  prompt: z.string().min(1),
+  rule: ScheduleRuleSchema,
+  status: z.enum(["active", "paused", "completed"]),
+  nextRunAt: z.string().optional(),
+  lastRunAt: z.string().optional(),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+});
+
+export type ScheduledTask = z.infer<typeof ScheduledTaskSchema>;
+
+export const ScheduledTaskUpdateSchema = ScheduledTaskSchema.pick({
+  creatorOpenId: true,
+  chatId: true,
+  targetBotId: true,
+  prompt: true,
+  rule: true,
+  status: true,
+})
+  .partial()
+  .strict();
+
+export type ScheduledTaskUpdate = z.infer<typeof ScheduledTaskUpdateSchema>;
+
+// Only the Store's internal callers may update runtime timestamps.
+export const ScheduledTaskPatchSchema = ScheduledTaskUpdateSchema.extend({
+  nextRunAt: ScheduledTaskSchema.shape.nextRunAt,
+  lastRunAt: ScheduledTaskSchema.shape.lastRunAt,
+});
+
+export type ScheduledTaskPatch = z.infer<typeof ScheduledTaskPatchSchema>;
 
 export function createScheduledTask(options: CreateScheduledTask & { id?: string }): ScheduledTask {
   const now = new Date().toISOString();

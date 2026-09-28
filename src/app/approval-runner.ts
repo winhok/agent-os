@@ -17,7 +17,7 @@ export async function continueApprovalFlow(options: {
   flow: ApprovalFlow;
   run: AbortController;
 }): Promise<void> {
-  const { bot, config, flow, run, runtime } = options;
+  const { bot, flow, run, runtime } = options;
   const session = runtime.sessions.get(flow.sessionId);
   if (!session) throw new Error("审批对应的会话已经失效");
 

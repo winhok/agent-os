@@ -9,14 +9,18 @@
 - `pnpm start:prod`：运行已编译的 `dist/index.js`
 - `pnpm agent-os doctor|start|stop|restart|status|logs`：检查本地环境并通过 PM2 管理生产进程
 - `pnpm build`：执行 TypeScript 编译，也是提交前的基础验证
+- `pnpm lint` / `pnpm lint:fix`：检查代码质量 / 自动修复可安全修复的问题
+- `pnpm format` / `pnpm format:check`：按现有风格格式化 / 只检查格式
+- `pnpm check`：依次执行 ESLint、Prettier 检查与 TypeScript 编译
+- `pnpm test`：运行类型边界回归测试，覆盖 CLI 事件、消息解析与定时任务更新及持久化
 - `pnpm probe:cli`：查看 Claude Code / Codex JSONL 事件流
 - `pnpm probe:tool`：调试应用 MCP 工具调用
 
-仓库当前没有独立的 lint 或 test 脚本；不要把 `pnpm build` 描述成真实飞书、浏览器或外部 CLI 的端到端验收。
+`pnpm test` 是本地回归测试；不要把它或 `pnpm check` / `pnpm build` 描述成真实飞书、浏览器或外部 CLI 的端到端验收。
 
 ## 配置与运行
 
-- Node.js 22+、pnpm，项目仅使用 ESM。
+- Node.js 22.13+（22.x）或 24+、pnpm，项目仅使用 ESM；版本下限与 ESLint 10 保持一致。
 - 从 `.env.example` 创建本地 `.env`，从 `config/bots.example.json` 创建 `config/bots.json`；两者都不得提交。
 - bot 凭证由配置中的 `appIdEnv` / `appSecretEnv` 间接引用，禁止在源码或示例配置中写真实凭证。
 - `teamLeader` 必须指向已启用的 bot；只有该 bot 可以调用 `dispatch_task`。`defaultProductDeliveryMode` 只支持 `local` 与 `lark-doc`。
@@ -40,6 +44,7 @@
 - `pnpm-workspace.yaml`：pnpm 安装策略与依赖构建脚本白名单
 - `tsconfig.json`：ESM TypeScript 编译边界，源码从 `src/` 输出到 `dist/`
 - `.prettierrc.json`、`.prettierignore`：格式化规则与排除范围
+- `eslint.config.js`：ESLint flat config，检查 Node.js / TypeScript 代码质量，通过 `eslint-config-prettier` 关闭格式冲突规则
 - `.gitignore`：隔离本地配置、构建结果和运行产物
 - `AGENTS.md`：仓库唯一的指导文档；`CLAUDE.md` 是指向它的相对软链接
 
@@ -98,7 +103,8 @@
 - 高风险操作必须由 `request_approval` 建立审批流；审批卡只能接受可识别操作者的决定，拒绝、超时或续接失败都不能被当作已获授权。
 - 定时任务的持久化由 Store 负责，创建、修改、删除、暂停、恢复与立即执行统一经过 `Scheduler`；执行时保留创建者身份、会话与目标 bot，并使用目标 bot 的工作目录，通用派发链不得误消费 `schedule_manage`。
 - JSON 状态继续使用临时文件加原子重命名写入；进程重启后把中断的 `creating` / `active` 会话恢复为 `idle`，不要把内存中的运行态当作可持久化事实。
-- 提交前至少运行 `pnpm build` 与 `git diff --check`，并确认没有暂存 `.env`、`config/bots.json`、`data/` 或 `logs/`。
+- 提交前至少运行 `pnpm check` 与 `git diff --check`，并确认没有暂存 `.env`、`config/bots.json`、`data/` 或 `logs/`。
+- 按 TypeScript 7 官方并行安装方案，`@typescript/native` 指向 TS7 并提供 `tsc`；`typescript` 指向 `@typescript/typescript6` 兼容包，为 ESLint 等工具提供 TS6 API 与 `tsc6`。不要将编译脚本切换为 `tsc6`。
 
 ## 错题本
 

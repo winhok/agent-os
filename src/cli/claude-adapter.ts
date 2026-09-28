@@ -50,7 +50,7 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function asNumber(value: unknown): number | undefined {
@@ -168,7 +168,9 @@ export class ClaudeAdapter implements CliAdapter {
   parseEvents(line: string): CliEvent[] {
     let event: ClaudeEvent;
     try {
-      event = JSON.parse(line) as ClaudeEvent;
+      const parsed: unknown = JSON.parse(line);
+      if (!isRecord(parsed)) return [];
+      event = parsed;
     } catch {
       return [];
     }

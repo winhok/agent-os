@@ -11,28 +11,40 @@
     "start:prod": "node dist/index.js",
     "agent-os": "tsx src/deploy-cli.ts",
     "build": "tsc",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm lint && pnpm format:check && pnpm build",
+    "test": "node --import tsx --test tests/*.test.mjs",
     "probe:cli": "tsx src/probe-cli.ts",
     "probe:tool": "tsx src/probe-app-tool.ts"
   },
   "engines": {
-    "node": ">=22"
+    "node": "^22.13.0 || >=24"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "packageManager": "pnpm@12.0.0",
+  "packageManager": "pnpm@12.6.0",
   "dependencies": {
-    "@larksuiteoapi/node-sdk": "^1.73.2",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@larksuiteoapi/node-sdk": "^1.74.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "cac": "^7.0.0",
     "croner": "^10.0.1",
-    "dotenv": "^17.4.2",
-    "zod": "^4.5.4"
+    "dotenv": "^18.0.4",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^26.4.1",
-    "prettier": "^3.9.6",
-    "tsx": "^4.23.13",
-    "typescript": "^7.0.2"
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.3",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "eslint": "^10.11.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.9",
+    "tsx": "^4.23.15",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-eslint": "^8.71.0"
   }
 }

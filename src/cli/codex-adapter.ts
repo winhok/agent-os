@@ -18,7 +18,7 @@ interface CodexEvent {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function asNumber(value: unknown): number | undefined {
@@ -134,7 +134,9 @@ export class CodexAdapter implements CliAdapter {
   parseEvents(line: string): CliEvent[] {
     let event: CodexEvent;
     try {
-      event = JSON.parse(line) as CodexEvent;
+      const parsed: unknown = JSON.parse(line);
+      if (!isRecord(parsed)) return [];
+      event = parsed;
     } catch {
       return [];
     }

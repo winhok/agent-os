@@ -20,7 +20,7 @@ Give a bot a goal in a Feishu thread. Agent OS keeps the CLI session tied to tha
 
 ### Prerequisites
 
-- Node.js 22+ and pnpm (use the version in [`package.json`](package.json), currently 12.0.0).
+- Node.js 22.13+ (22.x) or 24+ and pnpm (use the version in [`package.json`](package.json), currently 12.6.0).
 - At least one installed and authenticated CLI, `claude` or `codex`, that can run in the target project directory.
 - A Feishu custom app with bot capability for each enabled bot. You need its App ID and App Secret.
 - For the example product delivery workflow: install the Skills named in the bot configuration separately. Feishu document delivery also requires `lark-cli` and the appropriate user authorization. Listing a Skill in the configuration does not install it.

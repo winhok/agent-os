@@ -1,7 +1,6 @@
 import { readFileSync, watchFile, unwatchFile } from "node:fs";
 import type { Scheduler } from "./scheduler.js";
-import { ScheduledTaskSchema } from "../core/schedule-store.js";
-import type { ScheduledTask } from "../core/schedule.js";
+import { ScheduledTaskSchema, type ScheduledTask } from "../core/schedule.js";
 
 export interface ScheduleWatcherOptions {
   scheduler: Scheduler;

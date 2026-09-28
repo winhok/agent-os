@@ -18,8 +18,8 @@
 
 ### 1. 准备环境
 
-- Node.js **22+**。
-- pnpm，版本以 `package.json` 的 `packageManager` 为准，当前为 **12.0.0**。
+- Node.js **22.13+（22.x）或 24+**。
+- pnpm，版本以 `package.json` 的 `packageManager` 为准，当前为 **12.6.0**。
 - 至少一个已安装、完成认证且能在目标目录运行的 CLI：`claude` 或 `codex`。
 - 飞书自建应用及机器人能力；每个启用的 bot 对应自己的应用凭证。
 - 使用示例产品交付流程时，需要另行准备配置中声明的 Skills，以及飞书文档操作所需的 `lark-cli` 和用户授权。配置 Skills 名称不会自动安装它们。

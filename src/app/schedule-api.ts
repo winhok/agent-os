@@ -14,7 +14,7 @@ export interface ScheduleApiOptions {
 }
 
 export function startScheduleApi(options: ScheduleApiOptions): void {
-  const { scheduler, scheduleStore, runStore, port, token } = options;
+  const { scheduler, runStore, port, token } = options;
   const server = createServer(async (req, res) => {
     try {
       if (!isAuthorized(req, token)) {

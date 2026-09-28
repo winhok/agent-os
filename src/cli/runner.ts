@@ -1,7 +1,7 @@
 import { killCli, spawnCli } from "./spawn-cli.js";
 import { promptInputForPlatform } from "./types.js";
 import { createInterface } from "node:readline";
-import type { CliAdapter, CliEvent, CliRunResult } from "./types.js";
+import type { CliAdapter, CliEvent, CliRunResult, CliToolCall } from "./types.js";
 
 const DEFAULT_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
@@ -63,9 +63,9 @@ export function runCli(options: RunCliOptions): Promise<CliRunResult> {
     let observedSessionId = sessionId;
     let observedAnswer: string | undefined;
     let observedStats: CliRunResult["stats"];
-    const observedToolCalls = new Map<string, NonNullable<CliRunResult["toolCalls"]>[number]>();
+    const observedToolCalls = new Map<string, CliToolCall>();
     let finalResult: CliRunResult | undefined;
-    let stoppedByToolCall: NonNullable<CliRunResult["toolCalls"]>[number] | undefined;
+    let stoppedByToolCall: CliToolCall | undefined;
     let resultError: Error | undefined;
     let stderr = "";
     let settled = false;

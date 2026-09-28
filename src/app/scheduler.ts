@@ -2,11 +2,14 @@ import { randomUUID } from "node:crypto";
 import { Cron } from "croner";
 import type { ScheduleRunStore } from "../core/schedule-run-store.js";
 import type { ScheduleStore } from "../core/schedule-store.js";
-import type { CreateScheduledTask, ScheduledTask } from "../core/schedule.js";
+import {
+  ScheduledTaskUpdateSchema,
+  type CreateScheduledTask,
+  type ScheduledTask,
+  type ScheduledTaskUpdate,
+} from "../core/schedule.js";
 import type { AppRuntime } from "./runtime.js";
 import { dispatchScheduledTask } from "./scheduled-task-dispatcher.js";
-
-const ONCE_GRACE_MS = 5 * 60 * 1000;
 
 export class Scheduler {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -83,13 +86,10 @@ export class Scheduler {
     return this.options.scheduleStore.delete(id);
   }
 
-  update(
-    id: string,
-    patch: Partial<Pick<ScheduledTask, "targetBotId" | "prompt" | "rule" | "status" | "chatId" | "creatorOpenId">>,
-  ): ScheduledTask | undefined {
+  update(id: string, patch: ScheduledTaskUpdate): ScheduledTask | undefined {
     const task = this.options.scheduleStore.get(id);
     if (!task) return undefined;
-    const updated = this.options.scheduleStore.update(id, patch);
+    const updated = this.options.scheduleStore.update(id, ScheduledTaskUpdateSchema.parse(patch));
     if (updated) {
       this.clearTimer(id);
       if (updated.status === "active") this.schedule(updated);

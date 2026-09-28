@@ -3,5 +3,17 @@ allowBuilds:
   protobufjs: true
 minimumReleaseAgeExclude:
   - tsx@4.23.5
-  - '@types/node@26.3.0'
-  - '@larksuiteoapi/node-sdk@1.73.1 || 1.73.2'
+  - "@types/node@26.3.0"
+  - "@larksuiteoapi/node-sdk@1.73.1 || 1.73.2"
+  - "@modelcontextprotocol/sdk@1.31.0"
+  - "@typescript-eslint/eslint-plugin@8.71.0"
+  - "@typescript-eslint/parser@8.71.0"
+  - "@typescript-eslint/project-service@8.71.0"
+  - "@typescript-eslint/scope-manager@8.71.0"
+  - "@typescript-eslint/tsconfig-utils@8.71.0"
+  - "@typescript-eslint/type-utils@8.71.0"
+  - "@typescript-eslint/types@8.71.0"
+  - "@typescript-eslint/typescript-estree@8.71.0"
+  - "@typescript-eslint/utils@8.71.0"
+  - "@typescript-eslint/visitor-keys@8.71.0"
+  - typescript-eslint@8.71.0

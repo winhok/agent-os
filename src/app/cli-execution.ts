@@ -1,4 +1,4 @@
-import { runCli } from "../cli/runner.js";
+import { runCli, type RunCliOptions } from "../cli/runner.js";
 import type { CliAdapter } from "../cli/types.js";
 
 export function executeCli(
@@ -8,7 +8,7 @@ export function executeCli(
   sessionId: string | undefined,
   signal: AbortSignal,
   stopToolNames: string[],
-  onEvent: Parameters<typeof runCli>[0]["onEvent"],
+  onEvent: RunCliOptions["onEvent"],
   env?: Record<string, string>,
 ) {
   return runCli({
