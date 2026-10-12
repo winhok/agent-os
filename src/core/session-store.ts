@@ -1,3 +1,4 @@
+import { readJsonState } from "./json-state-reader.js";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { z } from "zod";
@@ -70,27 +71,17 @@ export class JsonSessionStore implements SessionStore {
       throw error;
     }
 
-    const rows: unknown = JSON.parse(content);
-    if (!Array.isArray(rows)) {
-      throw new Error(`会话文件格式错误: ${this.filePath}`);
-    }
-
-    const sessions: Session[] = [];
-    let needsCleanup = false;
-    for (const row of rows) {
-      const { candidate, migrated } = migrateLegacySession(row, this.legacyBotId, this.defaultWorkspaces);
-      const result = SessionSchema.safeParse(candidate);
-      if (!result.success) {
-        needsCleanup = true;
-        continue;
-      }
-      if (migrated) needsCleanup = true;
-
-      const recovered = recoverInterruptedSession(result.data);
-      if (recovered.status !== result.data.status) needsCleanup = true;
-      sessions.push(recovered);
-    }
-    if (needsCleanup) await this.save(sessions);
+    const schema = z.preprocess(
+      (row) => migrateLegacySession(row, this.legacyBotId, this.defaultWorkspaces).candidate,
+      SessionSchema,
+    );
+    const loaded = readJsonState(content, this.filePath, "会话状态文件", schema, {
+      keys: (record) => [`id:${record.id}`, "scope:" + JSON.stringify([record.botId, record.chatId, record.threadId])],
+      migrated: (row) => migrateLegacySession(row, this.legacyBotId, this.defaultWorkspaces).migrated,
+    });
+    const sessions = loaded.records.map(recoverInterruptedSession);
+    const recovered = sessions.some((session, index) => session.status !== loaded.records[index]?.status);
+    if (loaded.changed || recovered) await this.save(sessions);
     return sessions;
   }
 

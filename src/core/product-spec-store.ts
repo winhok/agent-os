@@ -1,3 +1,4 @@
+import { readJsonState } from "./json-state-reader.js";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { z } from "zod";
@@ -70,12 +71,7 @@ function loadFlows(filePath: string): ProductSpecFlow[] {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
   }
-  const rows: unknown = JSON.parse(content);
-  if (!Array.isArray(rows)) {
-    throw new Error(`产品方案状态文件格式错误: ${filePath}`);
-  }
-  return rows.flatMap((row) => {
-    const result = ProductSpecFlowSchema.safeParse(row);
-    return result.success ? [result.data] : [];
-  });
+  return readJsonState(content, filePath, "产品方案状态文件", ProductSpecFlowSchema, {
+    keys: (record) => [record.token],
+  }).records;
 }

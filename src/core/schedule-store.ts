@@ -1,8 +1,10 @@
+import { readJsonState, preserveJsonFields } from "./json-state-reader.js";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import {
   ScheduledTaskSchema,
   ScheduledTaskPatchSchema,
+  ScheduledTaskUpdateSchema,
   createScheduledTask,
   type CreateScheduledTask,
   type ScheduledTask,
@@ -36,12 +38,17 @@ export class ScheduleStore {
     const current = this.tasks.get(id);
     if (!current) return undefined;
     const validatedPatch = ScheduledTaskPatchSchema.parse(patch);
-    const updated = ScheduledTaskSchema.parse({
-      ...current,
-      ...validatedPatch,
-      id: current.id,
-      updatedAt: new Date().toISOString(),
-    });
+    const updated = preserveJsonFields(
+      current,
+      ScheduledTaskSchema.parse({
+        ...current,
+        ...validatedPatch,
+        id: current.id,
+        revision:
+          current.revision + (ScheduledTaskUpdateSchema.keyof().options.some((key) => key in validatedPatch) ? 1 : 0),
+        updatedAt: new Date().toISOString(),
+      }),
+    );
     this.tasks.set(id, updated);
     return updated;
   }
@@ -62,7 +69,9 @@ export class ScheduleStore {
 
 export class JsonScheduleStore extends ScheduleStore {
   constructor(private readonly filePath: string) {
-    super(loadTasks(filePath));
+    const loaded = loadTasks(filePath);
+    super(loaded.records);
+    if (loaded.changed) this.persist();
   }
 
   override create(options: CreateScheduledTask & { id?: string }): ScheduledTask {
@@ -97,20 +106,16 @@ export class JsonScheduleStore extends ScheduleStore {
   }
 }
 
-function loadTasks(filePath: string): ScheduledTask[] {
+function loadTasks(filePath: string): { records: ScheduledTask[]; changed: boolean } {
   let content: string;
   try {
     content = readFileSync(filePath, "utf8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { records: [], changed: false };
     throw error;
   }
-  const rows: unknown = JSON.parse(content);
-  if (!Array.isArray(rows)) {
-    throw new Error(`定时任务状态文件格式错误: ${filePath}`);
-  }
-  return rows.flatMap((row) => {
-    const result = ScheduledTaskSchema.safeParse(row);
-    return result.success ? [result.data] : [];
+  return readJsonState(content, filePath, "定时任务状态文件", ScheduledTaskSchema, {
+    keys: (record) => [record.id],
+    migrated: (row) => typeof row === "object" && row !== null && !("revision" in row),
   });
 }

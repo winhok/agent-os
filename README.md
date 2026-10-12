@@ -191,7 +191,7 @@ You can also run `pnpm start:prod` after building to start `dist/index.js` direc
 
 Agent OS starts Claude Code and Codex without their per-action permission prompts. They can edit files and run commands within the operating system account's access. Feishu approval cards are part of the workflow; they do not replace operating system access controls. Run Agent OS under an appropriate account and point bots only at projects you intend them to work on.
 
-Restrict access to the schedule management port and set `SCHEDULE_API_TOKEN` in `.env`, especially if the port can be reached from another machine.
+The schedule management API listens only on `127.0.0.1` for local MCP subprocesses. `SCHEDULE_API_TOKEN` is optional; when set, requests must include it in `x-api-token`.
 
 Back up these locations when moving to another host:
 

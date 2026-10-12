@@ -1,3 +1,4 @@
+import { readJsonState } from "./json-state-reader.js";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { z } from "zod";
@@ -78,12 +79,6 @@ function loadFlows(filePath: string): ApprovalFlow[] {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
   }
-  const rows: unknown = JSON.parse(content);
-  if (!Array.isArray(rows)) {
-    throw new Error(`审批状态文件格式错误: ${filePath}`);
-  }
-  return rows.flatMap((row) => {
-    const result = ApprovalFlowSchema.safeParse(row);
-    return result.success ? [result.data] : [];
-  });
+  return readJsonState(content, filePath, "审批状态文件", ApprovalFlowSchema, { keys: (record) => [record.token] })
+    .records;
 }

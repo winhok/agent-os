@@ -11,6 +11,8 @@ import {
 import type { AppRuntime } from "./runtime.js";
 import { dispatchScheduledTask } from "./scheduled-task-dispatcher.js";
 
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
 export class Scheduler {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private running = false;
@@ -120,14 +122,30 @@ export class Scheduler {
     this.clearTimer(task.id);
     const delayMs = this.nextRunDelay(task);
     if (delayMs === undefined) return;
+    const dueAt = (this.options.now?.() ?? new Date()).getTime() + delayMs;
     const updated = this.options.scheduleStore.update(task.id, {
-      nextRunAt: new Date(Date.now() + delayMs).toISOString(),
+      nextRunAt: new Date(dueAt).toISOString(),
     });
-    if (!updated) return;
-    const timer = setTimeout(() => {
-      this.timers.delete(task.id);
-      void this.onDue(updated);
-    }, delayMs);
+    if (updated) this.waitUntilDue(updated, dueAt);
+  }
+
+  private waitUntilDue(task: ScheduledTask, dueAt: number): void {
+    const remaining = dueAt - (this.options.now?.() ?? new Date()).getTime();
+    const timer = setTimeout(
+      () => {
+        this.timers.delete(task.id);
+        const current = this.options.scheduleStore.get(task.id);
+        if (!current || current.status !== "active" || current.revision !== task.revision) return;
+        if ((this.options.now?.() ?? new Date()).getTime() < dueAt) {
+          this.waitUntilDue(current, dueAt);
+          return;
+        }
+        void this.onDue(current).catch((error: unknown) => {
+          console.error(`[定时] 到期任务 ${task.id} 处理失败:`, error);
+        });
+      },
+      Math.max(1, Math.min(remaining, MAX_TIMER_DELAY_MS)),
+    );
     timer.unref?.();
     this.timers.set(task.id, timer);
   }
@@ -145,7 +163,7 @@ export class Scheduler {
       const cron = new Cron(task.rule.expression, {
         timezone: task.rule.timezone,
       });
-      const next = cron.msToNext();
+      const next = cron.msToNext(now);
       return next === null || next === undefined ? undefined : Math.max(1_000, next);
     } catch (error) {
       console.error(`[定时] Cron 表达式无效，已暂停任务 ${task.id}:`, (error as Error).message);
@@ -157,14 +175,17 @@ export class Scheduler {
   private async onDue(task: ScheduledTask): Promise<void> {
     const current = this.options.scheduleStore.get(task.id);
     if (!current || current.status !== "active") return;
-    const scheduledFor = new Date().toISOString();
+    const revision = current.revision;
+    const scheduledFor = (this.options.now?.() ?? new Date()).toISOString();
     await this.trigger(current, scheduledFor);
 
-    if (current.rule.kind === "once") {
-      this.options.scheduleStore.update(current.id, { status: "completed" });
+    const refreshed = this.options.scheduleStore.get(current.id);
+    // Runtime timestamps do not advance the revision; user edits, pause and resume do.
+    if (!refreshed || refreshed.status !== "active" || refreshed.revision !== revision) return;
+    if (refreshed.rule.kind === "once") {
+      this.options.scheduleStore.update(refreshed.id, { status: "completed", nextRunAt: undefined });
     } else {
-      const refreshed = this.options.scheduleStore.get(current.id);
-      if (refreshed?.status === "active") this.schedule(refreshed);
+      this.schedule(refreshed);
     }
   }
 

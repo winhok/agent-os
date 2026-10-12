@@ -78,6 +78,7 @@ export const ScheduledTaskSchema = z.object({
   prompt: z.string().min(1),
   rule: ScheduleRuleSchema,
   status: z.enum(["active", "paused", "completed"]),
+  revision: z.number().int().nonnegative().default(0),
   nextRunAt: z.string().optional(),
   lastRunAt: z.string().optional(),
   createdAt: z.string().min(1),
@@ -117,6 +118,7 @@ export function createScheduledTask(options: CreateScheduledTask & { id?: string
     prompt: options.prompt,
     rule: options.rule,
     status: "active",
+    revision: 0,
     createdAt: now,
     updatedAt: now,
   };

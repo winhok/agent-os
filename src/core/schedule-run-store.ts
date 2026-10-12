@@ -1,3 +1,4 @@
+import { readJsonState } from "./json-state-reader.js";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { dirname } from "node:path";
@@ -162,12 +163,7 @@ function loadRuns(filePath: string): ScheduledRun[] {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
     throw error;
   }
-  const rows: unknown = JSON.parse(content);
-  if (!Array.isArray(rows)) {
-    throw new Error(`定时任务运行记录文件格式错误: ${filePath}`);
-  }
-  return rows.flatMap((row) => {
-    const result = ScheduledRunSchema.safeParse(row);
-    return result.success ? [result.data] : [];
-  });
+  return readJsonState(content, filePath, "定时运行记录状态文件", ScheduledRunSchema, {
+    keys: (record) => [`id:${record.id}`, "scope:" + JSON.stringify([record.scheduleId, record.scheduledFor])],
+  }).records;
 }
