@@ -25,8 +25,20 @@ export async function handleSessionCommand(options: {
   cliRequest?: CliRequest;
   isNew: boolean;
   hasThread: boolean;
+  onSideEffect?: () => void;
 }): Promise<CommandOutcome> {
-  const { runtime, scheduler, config, msg, bot, session, cliAdapter, command, cliRequest, isNew, hasThread } = options;
+  const { runtime, scheduler, config, msg, session, cliAdapter, command, cliRequest, isNew, hasThread } = options;
+  const bot: Bot = {
+    ...options.bot,
+    reply: (...args) => {
+      options.onSideEffect?.();
+      return options.bot.reply(...args);
+    },
+    replyCard: (...args) => {
+      options.onSideEffect?.();
+      return options.bot.replyCard(...args);
+    },
+  };
 
   if (!isNew && cliRequest && cliRequest.cliId !== session.cliId) {
     await bot.reply(
@@ -111,21 +123,25 @@ export async function handleSessionCommand(options: {
     const remove = /^delete\s+([a-z0-9_-]+)$/i.exec(request);
     const run = /^run\s+([a-z0-9_-]+)$/i.exec(request);
     if (pause) {
+      options.onSideEffect?.();
       const task = scheduler.pause(pause[1]);
       await bot.reply(msg.messageId, task ? `定时任务 ${task.id} 已暂停。` : "没有找到这个定时任务。", hasThread);
       return "handled";
     }
     if (resume) {
+      options.onSideEffect?.();
       const task = scheduler.resume(resume[1]);
       await bot.reply(msg.messageId, task ? `定时任务 ${task.id} 已恢复。` : "没有找到这个定时任务。", hasThread);
       return "handled";
     }
     if (remove) {
+      options.onSideEffect?.();
       const deleted = scheduler.delete(remove[1]);
       await bot.reply(msg.messageId, deleted ? `定时任务 ${remove[1]} 已删除。` : "没有找到这个定时任务。", hasThread);
       return "handled";
     }
     if (run) {
+      options.onSideEffect?.();
       const task = await scheduler.runNow(run[1]);
       await bot.reply(msg.messageId, task ? `定时任务 ${task.id} 已触发执行。` : "没有找到这个定时任务。", hasThread);
       return "handled";
@@ -142,6 +158,7 @@ export async function handleSessionCommand(options: {
       await bot.reply(msg.messageId, "当前话题的会话已经关闭。", hasThread);
       return "handled";
     }
+    options.onSideEffect?.();
     await runtime.sessions.clearCliSessionId(session.id);
     await bot.replyCard(
       msg.messageId,
@@ -219,6 +236,7 @@ export async function handleSessionCommand(options: {
       const workspaceDir = resolveWorkspacePath(command.path, session.workspaceDir);
       await ensureWorkspaceDirectory(workspaceDir);
       const changed = workspaceDir !== session.workspaceDir;
+      options.onSideEffect?.();
       await runtime.sessions.setWorkspaceDir(session.id, workspaceDir);
       await bot.reply(
         msg.messageId,
@@ -234,6 +252,7 @@ export async function handleSessionCommand(options: {
   }
 
   if (command?.name === "close") {
+    options.onSideEffect?.();
     const active = runtime.activeRuns.get(session.id);
     if (active) {
       active.cancelMode = "close";

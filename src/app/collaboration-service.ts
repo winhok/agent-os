@@ -3,7 +3,7 @@ import { basename } from "node:path";
 import type { Bot } from "../im/lark.js";
 import { buildCollaborationCard } from "../im/card.js";
 import type { BotConfig } from "../core/bot-registry.js";
-import type { CollaborationMessage } from "../core/collaboration.js";
+import { collaborationMessageMarker, type CollaborationMessage } from "../core/collaboration.js";
 import type { AppRuntime } from "./runtime.js";
 
 export interface CollaborationDispatch {
@@ -55,14 +55,7 @@ export class CollaborationService {
 
     try {
       if (options.chatId && options.skipCard) {
-        const mentionText = [
-          `新的协作任务：${options.objective}`,
-          options.instruction,
-          options.expectedOutput ? `期望产出：${options.expectedOutput}` : "",
-          `任务编号：${collaboration.dispatchId}`,
-        ]
-          .filter(Boolean)
-          .join("\n");
+        const mentionText = collaborationMessageMarker(collaboration.dispatchId);
         const mentionMessageId = await options.senderBot.sendMentionToChat(
           options.chatId,
           target.identity,
@@ -89,10 +82,7 @@ export class CollaborationService {
         if (!cardMessageId) {
           throw new Error("飞书没有返回协作卡片 message_id");
         }
-        const mentionText =
-          options.round === 1
-            ? `新的协作任务：${options.objective}（任务编号：${collaboration.dispatchId}），请查看上方卡片。`
-            : `协作结果已经返回（任务编号：${collaboration.dispatchId}），请查看上方卡片。`;
+        const mentionText = collaborationMessageMarker(collaboration.dispatchId);
         const mentionMessageId = options.chatId
           ? await options.senderBot.sendMentionToChat(options.chatId, target.identity, mentionText)
           : await options.senderBot.replyMention(cardMessageId, target.identity, mentionText, true);

@@ -1,5 +1,17 @@
 import { z } from "zod";
 
+export function collaborationMessageMarker(dispatchId: string): string {
+  return `[agent-os:collaboration:${dispatchId}]\nAgent OS 协作通知，请从收件箱读取完整任务。`;
+}
+
+export function parseCollaborationMessageMarker(text: string): string | undefined {
+  return text
+    .trim()
+    .match(
+      /^(?:ou_[a-zA-Z0-9_-]+\s+)?\[agent-os:collaboration:([a-f0-9]{32})\]\nAgent OS 协作通知，请从收件箱读取完整任务。$/,
+    )?.[1];
+}
+
 export interface CollaborationMessage {
   dispatchId: string;
   taskId: string;
@@ -87,8 +99,13 @@ export class CollaborationInbox {
     this.messages.set(message.dispatchId, message);
   }
 
-  consume(dispatchId: string, toBotId: string): CollaborationMessage | undefined {
+  peek(dispatchId: string, toBotId: string): CollaborationMessage | undefined {
     const message = this.messages.get(dispatchId);
+    return message?.toBotId === toBotId ? message : undefined;
+  }
+
+  consume(dispatchId: string, toBotId: string): CollaborationMessage | undefined {
+    const message = this.peek(dispatchId, toBotId);
     if (!message || message.toBotId !== toBotId) return undefined;
     this.messages.delete(dispatchId);
     return message;

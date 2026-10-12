@@ -4,7 +4,7 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - tsx@4.23.5
   - "@types/node@26.3.0"
-  - "@larksuiteoapi/node-sdk@1.73.1 || 1.73.2"
+  - "@larksuiteoapi/node-sdk@1.73.1 || 1.73.2 || 1.75.0"
   - "@modelcontextprotocol/sdk@1.31.0"
   - "@typescript-eslint/eslint-plugin@8.71.0"
   - "@typescript-eslint/parser@8.71.0"
@@ -17,3 +17,5 @@ minimumReleaseAgeExclude:
   - "@typescript-eslint/utils@8.71.0"
   - "@typescript-eslint/visitor-keys@8.71.0"
   - typescript-eslint@8.71.0
+  - cac@7.1.0
+  - zod@4.6.6
